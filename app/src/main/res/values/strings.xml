@@ -3,4 +3,25 @@
     <string name="title_home">Home</string>
     <string name="title_dashboard">Dashboard</string>
     <string name="title_notifications">Notifications</string>
+
+    <!-- String for GetStartedFragment -->
+    <string name="title_get_started_welcome">Welcome to Clinic</string>
+    <string name="subtitle_get_started_welcome">Welcome to Clinic</string>
+
+    <!-- Strings for RegisterFragment -->
+    <string name="title_register">Register</string>
+    <string name="hint_email">Email</string>
+    <string name="hint_password">Password</string>
+    <string name="hint_confirm_password">Confirm Password</string>
+    <string name="action_register">Register</string>
+    <string name="prompt_already_have_account">Already have an account? Login</string>
+
+    <!-- Strings for LoginFragment -->
+    <string name="title_login">Login</string>
+    <string name="action_login">Login</string>
+    <string name="prompt_no_account">Don\'t have an account? Register</string>
+
+    <!-- String for Logout button -->
+    <string name="action_logout_go_to_login">Logout</string>
+
 </resources>

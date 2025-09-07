@@ -7,14 +7,14 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.navigation.fragment.findNavController
+import com.example.project_mobileapps.R
 import com.example.project_mobileapps.databinding.FragmentHomeBinding
 
 class HomeFragment : Fragment() {
 
     private var _binding: FragmentHomeBinding? = null
 
-    // This property is only valid between onCreateView and
-    // onDestroyView.
     private val binding get() = _binding!!
 
     override fun onCreateView(
@@ -33,6 +33,14 @@ class HomeFragment : Fragment() {
             textView.text = it
         }
         return root
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        binding.buttonGoToLogin.setOnClickListener {
+            // Navigate to LoginFragment, clearing the back stack
+            findNavController().navigate(R.id.action_global_to_loginFragment) // We'll define this global action
+        }
     }
 
     override fun onDestroyView() {
