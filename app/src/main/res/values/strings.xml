@@ -1,8 +1,10 @@
 <resources>
     <string name="app_name">Project_MobileApps</string>
+
+    <!-- String for Bottom Navigation Bar    -->
     <string name="title_home">Home</string>
-    <string name="title_dashboard">Dashboard</string>
     <string name="title_notifications">Notifications</string>
+
 
     <!-- String for GetStartedFragment -->
     <string name="title_get_started_welcome">Welcome to Clinic</string>
@@ -17,11 +19,19 @@
     <string name="prompt_already_have_account">Already have an account? Login</string>
 
     <!-- Strings for LoginFragment -->
-    <string name="title_login">Login</string>
+    <string name="title_login">Login to Clinic</string>
     <string name="action_login">Login</string>
     <string name="prompt_no_account">Don\'t have an account? Register</string>
 
     <!-- String for Logout button -->
     <string name="action_logout_go_to_login">Logout</string>
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+
+    <!--  String for Home  -->
+
+    <!-- String for Schedule  -->
+    <string name="title_schedule">Schedule</string>
+
+    <!-- String for     -->
 
 </resources>
