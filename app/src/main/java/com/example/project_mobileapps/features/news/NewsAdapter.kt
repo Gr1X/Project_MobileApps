@@ -15,7 +15,7 @@ data class NewsArticleUI(
     val source: String,
     val imageUrl: String?,
     val articleUrl: String?
-    )
+)
 
 class NewsAdapter(private val newsList: List<NewsArticleUI>) :
     RecyclerView.Adapter<NewsAdapter.NewsViewHolder>() {
@@ -24,6 +24,7 @@ class NewsAdapter(private val newsList: List<NewsArticleUI>) :
         val titleTextView: TextView = view.findViewById(R.id.newsTitleTextView)
         val sourceTextView: TextView = view.findViewById(R.id.newsSourceTextView)
         val imageView: ImageView = view.findViewById(R.id.newsImageView)
+        val readMoreTextView: TextView = view.findViewById(R.id.newsReadMore)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): NewsViewHolder {
@@ -35,15 +36,28 @@ class NewsAdapter(private val newsList: List<NewsArticleUI>) :
         val news = newsList[position]
         holder.titleTextView.text = news.title
         holder.sourceTextView.text = news.source
-        Glide.with(holder.itemView.context).load(news.imageUrl).placeholder(R.drawable.ic_launcher_background).into(holder.imageView)
+        Glide.with(holder.itemView.context)
+            .load(news.imageUrl)
+            .placeholder(R.drawable.ic_launcher_background)
+            .into(holder.imageView)
 
+        // Klik di seluruh card
         holder.itemView.setOnClickListener {
-            val intent = Intent(holder.itemView.context, NewsDetailActivity::class.java).apply {
-                putExtra("ARTICLE_URL", news.articleUrl)
-            }
-            holder.itemView.context.startActivity(intent)
+            openDetail(holder, news)
+        }
+
+        // Klik di teks "Lihat selengkapnya"
+        holder.readMoreTextView.setOnClickListener {
+            openDetail(holder, news)
         }
     }
 
     override fun getItemCount() = newsList.size
+
+    private fun openDetail(holder: NewsViewHolder, news: NewsArticleUI) {
+        val intent = Intent(holder.itemView.context, NewsDetailActivity::class.java).apply {
+            putExtra("ARTICLE_URL", news.articleUrl)
+        }
+        holder.itemView.context.startActivity(intent)
+    }
 }
