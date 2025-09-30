@@ -40,7 +40,7 @@ fun GetStartedScreen(
         )
 
         Text(
-            text = "HealtyApp",
+            text = "HealthyApp",
             color = PrimaryGreen,
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
