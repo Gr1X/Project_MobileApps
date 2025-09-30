@@ -12,17 +12,17 @@ import androidx.fragment.app.viewModels
 import androidx.navigation.fragment.findNavController
 import com.example.project_mobileapps.R
 import com.example.project_mobileapps.ui.themes.ProjectMobileAppsTheme
+import androidx.navigation.fragment.navArgs
 
 class AuthFragment : Fragment() {
     private val viewModel: AuthViewModel by viewModels()
+    private val args: AuthFragmentArgs by navArgs()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return ComposeView(requireContext()).apply {
             setContent {
                 val authState by viewModel.authState.collectAsState()
-
-                // State untuk mengatur layar mana yang tampil (Login atau Register)
-                var showLoginScreen by remember { mutableStateOf(true) }
+                var showLoginScreen by remember { mutableStateOf(args.showLoginByDefault) }
 
                 LaunchedEffect(authState.isSuccess) {
                     if (authState.isSuccess) {
@@ -35,21 +35,18 @@ class AuthFragment : Fragment() {
                     if (showLoginScreen) {
                         LoginScreen(
                             authState = authState,
-                            onLoginClick = { email, pass ->
-                                viewModel.loginUser(email, pass)
-                            },
+                            onLoginClick = viewModel::loginUser,
                             onNavigateToRegister = {
-                                viewModel.resetAuthState() // Hapus pesan error lama
-                                showLoginScreen = false // Pindah ke layar register
+                                viewModel.resetAuthState()
+                                showLoginScreen = false
                             }
                         )
                     } else {
-                        // Modifikasi RegisterScreen agar bisa kembali ke login
                         RegisterScreen(
                             authViewModel = viewModel,
                             onNavigateToLogin = {
-                                viewModel.resetAuthState() // Hapus pesan error lama
-                                showLoginScreen = true // Pindah ke layar login
+                                viewModel.resetAuthState()
+                                showLoginScreen = true
                             }
                         )
                     }
