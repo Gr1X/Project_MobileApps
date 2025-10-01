@@ -59,7 +59,6 @@ class HomeViewModel : ViewModel() {
             val doctorsFromRepo = doctorRepository.getAllDoctors()
 
             // 2. AMBIL DATA BOOKING ASLI DARI REPOSITORY
-            // TODO: Ganti "user123_abc" dengan ID user yang sedang login nanti
             val upcomingBooking = bookingRepository.getUpcomingBookingForUser("user123_abc")
 
             val user = userRepository.getUser(userId)

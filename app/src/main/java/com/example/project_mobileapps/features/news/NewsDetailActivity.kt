@@ -23,7 +23,7 @@ class NewsDetailActivity : AppCompatActivity() {
         val url = intent.getStringExtra("ARTICLE_URL")
 
         if (url != null) {
-            webView.settings.javaScriptEnabled = true // Aktifkan JavaScript
+            webView.settings.javaScriptEnabled = true
             webView.webViewClient = object : WebViewClient() {
                 // Tampilkan ProgressBar saat halaman mulai dimuat
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {

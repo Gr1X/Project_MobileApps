@@ -41,12 +41,10 @@ class NewsAdapter(private val newsList: List<NewsArticleUI>) :
             .placeholder(R.drawable.ic_launcher_background)
             .into(holder.imageView)
 
-        // Klik di seluruh card
         holder.itemView.setOnClickListener {
             openDetail(holder, news)
         }
 
-        // Klik di teks "Lihat selengkapnya"
         holder.readMoreTextView.setOnClickListener {
             openDetail(holder, news)
         }

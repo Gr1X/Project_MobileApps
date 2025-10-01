@@ -62,8 +62,11 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    // Tambahkan juga fungsi ini untuk mereset state saat pindah halaman
     fun resetAuthState() {
         _authState.value = AuthState()
+    }
+
+    fun logOutUser(){
+        auth.signOut()
     }
 }

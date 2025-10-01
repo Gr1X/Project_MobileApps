@@ -27,7 +27,6 @@ class NewsViewModel : ViewModel() {
             Log.d("NewsAppDebug", "Coroutine launched, calling repository...")
             val articlesFromApi = repository.getHealthNews()
 
-            // Log untuk melihat berapa artikel yang kembali dari repository
             Log.d("NewsAppDebug", "Repository returned ${articlesFromApi.size} articles.")
 
             _newsArticles.value = articlesFromApi.map { apiArticle ->
