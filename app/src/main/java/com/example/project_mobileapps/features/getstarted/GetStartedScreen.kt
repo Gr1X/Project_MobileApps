@@ -39,16 +39,6 @@ fun GetStartedScreen(
             alpha = 0.3f
         )
 
-        Text(
-            text = "HealthyApp",
-            color = PrimaryGreen,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp)
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -60,7 +50,7 @@ fun GetStartedScreen(
             Text(
                 text = "Selamat Datang di HealthyApp",
                 style = TextStyle(
-                    fontSize = 32.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = PrimaryGreen,
                     lineHeight = 38.sp
@@ -71,8 +61,9 @@ fun GetStartedScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Solusi kesehatan Anda dalam satu genggaman. Buat janji temu dengan dokter pilihan Anda dengan mudah.",
-                fontSize = 16.sp,
+                text = "Solusi kesehatan Anda dalam satu genggaman. " +
+                        "Buat janji temu dengan dokter pilihan Anda dengan mudah.",
+                fontSize = 12.sp,
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.DarkGray,
                 textAlign = TextAlign.Start

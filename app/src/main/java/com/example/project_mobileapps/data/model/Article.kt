@@ -1,4 +1,4 @@
-package com.example.project_mobileapps.data.model
+ package com.example.project_mobileapps.data.model
 
 data class Article(
     val author: String?,

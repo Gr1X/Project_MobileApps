@@ -1,43 +1,45 @@
-
 package com.example.project_mobileapps.features.news
 
-import android.util.Log
-import androidx.lifecycle.*
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.project_mobileapps.data.repo.NewsRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+data class NewsUiState(
+    val articles: List<NewsArticleUI> = emptyList(),
+    val isLoading: Boolean = false
+)
+
 class NewsViewModel : ViewModel() {
-    private val repository = NewsRepository()
+    private val newsRepository = NewsRepository()
 
-    private val _newsArticles = MutableLiveData<List<NewsArticleUI>>()
-    val newsArticles: LiveData<List<NewsArticleUI>> = _newsArticles
-
-    private val _isLoading = MutableLiveData<Boolean>()
-    val isLoading: LiveData<Boolean> = _isLoading
+    private val _uiState = MutableStateFlow(NewsUiState())
+    val uiState = _uiState.asStateFlow()
 
     init {
-        // Log untuk memastikan ViewModel dibuat
-        Log.d("NewsAppDebug", "NewsViewModel init block is called.")
         fetchHealthNews()
     }
 
     private fun fetchHealthNews() {
-        _isLoading.value = true
+        _uiState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
-            Log.d("NewsAppDebug", "Coroutine launched, calling repository...")
-            val articlesFromApi = repository.getHealthNews()
-
-            Log.d("NewsAppDebug", "Repository returned ${articlesFromApi.size} articles.")
-
-            _newsArticles.value = articlesFromApi.map { apiArticle ->
-                NewsArticleUI(
-                    title = apiArticle.title ?: "Tanpa Judul",
-                    source = apiArticle.source?.name ?: "N/A",
-                    imageUrl = apiArticle.urlToImage,
-                    articleUrl = apiArticle.url
+            val articlesFromApi = newsRepository.getHealthNews()
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    articles = articlesFromApi.map { apiArticle ->
+                        NewsArticleUI(
+                            title = apiArticle.title ?: "Tanpa Judul",
+                            source = apiArticle.source?.name ?: "N/A",
+                            imageUrl = apiArticle.urlToImage,
+                            articleUrl = apiArticle.url
+                        )
+                    }
                 )
             }
-            _isLoading.value = false
         }
     }
 }

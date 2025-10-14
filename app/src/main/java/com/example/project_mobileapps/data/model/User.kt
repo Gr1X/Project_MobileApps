@@ -4,13 +4,17 @@ import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
 
-@IgnoreExtraProperties
-data class User(
-    val uid: String = "",
-    val name: String = "",
-    val email: String = "",
-    val profilePhotoUrl: String = "",
 
-    @ServerTimestamp
-    val createdAt: Date? = null
+enum class Role {
+    PASIEN,
+    DOKTER,
+    ADMIN
+}
+
+data class User(
+    val uid: String,
+    val name: String,
+    val email: String,
+    val password: String,
+    val role: Role
 )

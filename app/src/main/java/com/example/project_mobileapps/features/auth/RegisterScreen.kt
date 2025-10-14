@@ -24,7 +24,7 @@ import com.example.project_mobileapps.features.getstarted.PrimaryGreen
 
 @Composable
 fun RegisterScreen(
-    authViewModel: AuthViewModel = viewModel(),
+    authViewModel: AuthViewModel,
     onNavigateToLogin: () -> Unit
 ) {
     var name by remember { mutableStateOf("") }

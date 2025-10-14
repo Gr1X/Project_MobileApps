@@ -10,17 +10,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class DoctorDetailViewModel(
-    savedStateHandle: SavedStateHandle // Ini adalah cara modern untuk menerima argumen dari Navigasi
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val repository = DoctorRepository()
     private val doctorId: String = savedStateHandle.get<String>("doctorId")!!
-
     private val _doctor = MutableStateFlow<Doctor?>(null)
     val doctor: StateFlow<Doctor?> = _doctor
 
     init {
-        // Jika doctorId tidak kosong, ambil datanya dari repository
         if (doctorId.isNotBlank()) {
             fetchDoctorById(doctorId)
         }

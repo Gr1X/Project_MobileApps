@@ -1,16 +1,20 @@
-package com.example.project_mobileapps.features
+package com.example.project_mobileapps
 
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.example.project_mobileapps.R
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.navigation.compose.rememberNavController
+import com.example.project_mobileapps.navigation.AppNavigation
+import com.example.project_mobileapps.ui.themes.ProjectMobileAppsTheme
 
-class MainActivity : AppCompatActivity() {
-
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
-
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContent {
+            ProjectMobileAppsTheme {
+                val navController = rememberNavController()
+                AppNavigation(navController = navController)
+            }
+        }
     }
 }

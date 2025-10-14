@@ -7,5 +7,6 @@ data class Doctor(
     val id: String = "",
     val name: String = "",
     val specialization: String = "",
-    val photoUrl: String = ""
+    val photoUrl: String = "",
+    val schedule: String = ""
 )

@@ -2,76 +2,103 @@ package com.example.project_mobileapps.features.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.project_mobileapps.data.model.Booking
 import com.example.project_mobileapps.data.model.Doctor
+import com.example.project_mobileapps.data.model.PracticeStatus
+import com.example.project_mobileapps.data.model.QueueItem
+import com.example.project_mobileapps.data.repo.AuthRepository
+
 import com.example.project_mobileapps.data.repo.DoctorRepository
+import com.example.project_mobileapps.data.repo.QueueRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.Date
-import com.example.project_mobileapps.data.repo.BookingRepository
-import com.example.project_mobileapps.data.repo.UserRepository
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.ktx.auth
-import com.google.firebase.ktx.Firebase
-
-/**
- * State ini menampung semua data yang dibutuhkan oleh HomeScreen dalam satu objek.
- */
+import java.util.Calendar
 
 data class HomeUiState(
-    val userName: String = "",
-    val upcomingAppointment: Booking? = null,
-    val recentDoctors: List<Doctor> = emptyList(),
-    val isLoading: Boolean = false
+    val greeting: String = "Selamat Datang",
+    val userName: String = "Pengguna",
+    val doctor: Doctor? = null,
+    val activeQueue: QueueItem? = null,
+    val practiceStatus: PracticeStatus? = null,
+    val currentlyServingPatient: QueueItem? = null,
+    val upcomingQueue: List<QueueItem> = emptyList(),
+    val availableSlots: Int = 0,
+    val isLoading: Boolean = true
 )
 
-class HomeViewModel : ViewModel() {
-
-    // StateFlow untuk menyimpan dan mengirimkan HomeUiState ke UI
-    private val _uiState = MutableStateFlow(HomeUiState(isLoading = true))
+class HomeViewModel (
+    private val doctorRepository: DoctorRepository,
+    private val authRepository: AuthRepository,
+    private val queueRepository: QueueRepository
+) : ViewModel() {
+    private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    // Inisialisasi repository
-    private val doctorRepository = DoctorRepository()
-    private val bookingRepository = BookingRepository()
-    private val userRepository = UserRepository()
+
+    private fun getGreetingBasedOnTime(): String {
+        val calendar = Calendar.getInstance()
+        return when (calendar.get(Calendar.HOUR_OF_DAY)) {
+            in 0..11 -> "Selamat Pagi"
+            in 12..13 -> "Selamat Siang"
+            in 14..17 -> "Selamat Sore"
+            else -> "Selamat Malam"
+        }
+    }
 
     init {
-        // Otomatis memuat data saat ViewModel dibuat
         fetchAllHomeData()
     }
 
     private fun fetchAllHomeData() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            combine(
+                authRepository.currentUser,
+                queueRepository.dailyQueuesFlow,
+                queueRepository.practiceStatusFlow
+            ) { user, queues, statuses ->
+                val doctorId = "doc_123"
+                val practiceStatus = statuses[doctorId]
 
-            val userId = Firebase.auth.currentUser?.uid
-            if (userId == null) {
-                // Handle jika tidak ada user, misal logout atau tampilkan error
-                _uiState.update { it.copy(isLoading = false) }
-                return@launch
-            }
+                val upcoming = queues
+                    .filter { it.status == com.example.project_mobileapps.data.model.QueueStatus.MENUNGGU ||
+                            it.status == com.example.project_mobileapps.data.model.QueueStatus.DIPANGGIL ||
+                            it.status == com.example.project_mobileapps.data.model.QueueStatus.DILAYANI
+                    }
 
-            // 1. Ambil daftar dokter (tetap sama)
-            val doctorsFromRepo = doctorRepository.getAllDoctors()
+                val slotsLeft = (practiceStatus?.dailyPatientLimit ?: 0) - (practiceStatus?.lastQueueNumber ?: 0)
 
-            // 2. AMBIL DATA BOOKING ASLI DARI REPOSITORY
-            val upcomingBooking = bookingRepository.getUpcomingBookingForUser("user123_abc")
+                val activeQueue = queues.find { it.userId == user?.uid && it.status == com.example.project_mobileapps.data.model.QueueStatus.MENUNGGU }
 
-            val user = userRepository.getUser(userId)
+                val currentlyServingPatient = queues
+                    .find { it.queueNumber == practiceStatus?.currentServingNumber && it.status == com.example.project_mobileapps.data.model.QueueStatus.DILAYANI }
 
-            // 3. Perbarui state dengan semua data baru
-            _uiState.update { currentState ->
-                currentState.copy(
-                    userName = user?.name?:"Pengguna",
-                    upcomingAppointment = upcomingBooking,
-                    recentDoctors = doctorsFromRepo,
-                    isLoading = false
-                )
+                _uiState.update {
+                    it.copy(
+                        greeting = getGreetingBasedOnTime(),
+                        userName = user?.name ?: "Pengguna",
+                        doctor = doctorRepository.getTheOnlyDoctor(),
+                        activeQueue = activeQueue,
+                        practiceStatus = practiceStatus,
+                        upcomingQueue = upcoming,
+                        currentlyServingPatient = currentlyServingPatient,
+                        availableSlots = slotsLeft.coerceAtLeast(0),
+                        isLoading = false
+                    )
+                }
+            }.collect()
+        }
+
+        viewModelScope.launch {
+            while (true) {
+                queueRepository.checkForLatePatients("doc_123")
+                delay(10000L)
             }
         }
+        // =======================================================
     }
 }
