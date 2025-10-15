@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 data class AuthState(
     val isLoading: Boolean = false,
     val error: String? = null,
-    val loggedInUser: User? = null // Ganti isSuccess dengan data user
+    val loggedInUser: User? = null
 )
 
 class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
@@ -22,16 +22,13 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
     private val _authState = MutableStateFlow(AuthState())
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
-    // TAMBAHKAN KEMBALI FUNGSI INI
     fun registerUser(name: String, email: String, pass: String) {
         viewModelScope.launch {
             _authState.value = AuthState(isLoading = true)
             val result = authRepository.register(name, email, pass)
             result.fold(
                 onSuccess = {
-                    // Jika registrasi dummy berhasil, langsung coba login
-                    // dengan akun pasien agar bisa masuk ke aplikasi.
-                    loginUser("pasien@gmail.com", "password")
+                    loginUser(email, pass)
                 },
                 onFailure = { exception ->
                     _authState.value = AuthState(error = exception.message)
@@ -56,7 +53,9 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
     }
 
     fun logOutUser() {
-        authRepository.logout()
+        viewModelScope.launch {
+            authRepository.logout()
+        }
     }
 
     fun resetAuthState() {
@@ -64,7 +63,6 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
     }
 }
 
-// Buat Factory untuk AuthViewModel
 class AuthViewModelFactory : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(AuthViewModel::class.java)) {

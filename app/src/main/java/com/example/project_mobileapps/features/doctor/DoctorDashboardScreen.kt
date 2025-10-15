@@ -1,19 +1,31 @@
+// File: features/doctor/DoctorDashboardScreen.kt
 package com.example.project_mobileapps.features.doctor
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.HourglassTop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.project_mobileapps.data.model.QueueItem
 import com.example.project_mobileapps.data.model.QueueStatus
-import com.example.project_mobileapps.di.AppContainer
+import com.example.project_mobileapps.features.admin.manageSchedule.PatientDetailBottomSheet
+import com.example.project_mobileapps.features.admin.manageSchedule.PatientQueueDetails
 import kotlinx.coroutines.delay
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -21,98 +33,165 @@ import java.util.concurrent.TimeUnit
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DoctorDashboardScreen(
-    onLogoutClick: () -> Unit,
-    viewModel: DoctorViewModel = viewModel(
-        factory = DoctorViewModelFactory(AppContainer.queueRepository)
-    )
+    // HAPUS onLogoutClick dari sini
+    viewModel: DoctorViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Dashboard Dokter") },
-                actions = {
-                    TextButton(onClick = onLogoutClick) {
-                        Text("Logout")
-                    }
-                }
+    // Tampilkan BottomSheet jika ada pasien yang dipilih
+    if (uiState.selectedPatient != null) {
+        PatientDetailBottomSheet(
+            patientDetails = uiState.selectedPatient!!,
+            onDismiss = { viewModel.clearSelectedPatient() }
+        )
+    }
+
+    // HAPUS Scaffold, ganti dengan LazyColumn
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            DoctorDashboardHeader(
+                uiState = uiState,
+                // Beri aksi kosong karena logout sudah ditangani di drawer
+                onLogoutClick = {}
             )
         }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-        ) {
-            PracticeStatusCard(
-                status = uiState.practiceStatus,
-                onTogglePractice = { viewModel.togglePracticeStatus() }
-            )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = { viewModel.callNextPatient() },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = uiState.practiceStatus?.isPracticeOpen ?: false
-            ) {
-                Text("Panggil Pasien Berikutnya")
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Divider()
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text("Daftar Antrian Hari Ini", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (uiState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-            } else if (uiState.queueList.isEmpty()) {
-                Text("Belum ada pasien dalam antrian.", modifier = Modifier.align(Alignment.CenterHorizontally))
-            } else {
-                // ===============================================
-                // PERBAIKI BAGIAN INI
-                // ===============================================
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(uiState.queueList) { queueItem ->
-                        PatientQueueCard(
-                            item = queueItem,
-                            onConfirmArrival = viewModel::confirmArrival,
-                            onFinishConsultation = viewModel::finishConsultation
-                        )
-                    }
+        item {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Button(
+                    onClick = { viewModel.callNextPatient(context) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = uiState.practiceStatus?.isPracticeOpen ?: false && uiState.queueList.any { it.queueItem.status == QueueStatus.MENUNGGU }
+                ) {
+                    Text("Panggil Pasien Berikutnya")
                 }
-                // ===============================================
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { viewModel.togglePracticeStatus() },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val buttonText = if (uiState.practiceStatus?.isPracticeOpen == true) "Tutup Praktik" else "Buka Praktik"
+                    Text(buttonText)
+                }
+            }
+        }
+
+        item {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Divider(modifier = Modifier.padding(top = 8.dp))
+                Spacer(Modifier.height(16.dp))
+                Text("Daftar Antrian Hari Ini", style = MaterialTheme.typography.titleMedium)
+            }
+        }
+
+        if (uiState.isLoading) {
+            item { CircularProgressIndicator(modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally)) }
+        } else if (uiState.queueList.isEmpty()) {
+            item {
+                Text(
+                    "Belum ada pasien dalam antrian.",
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            items(uiState.queueList, key = { it.queueItem.queueNumber }) { patientDetails ->
+                PatientQueueCard(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    item = patientDetails.queueItem,
+                    onClick = { viewModel.selectPatient(patientDetails) },
+                    onConfirmArrival = { viewModel.confirmArrival(it) },
+                    onFinishConsultation = { viewModel.finishConsultation(it) }
+                )
             }
         }
     }
 }
 
 @Composable
-fun PracticeStatusCard(status: com.example.project_mobileapps.data.model.PracticeStatus?, onTogglePractice: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+fun DoctorDashboardHeader(
+    uiState: DoctorUiState,
+    onLogoutClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(16.dp)
+    ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text("Status Praktik", style = MaterialTheme.typography.labelMedium)
-                val statusText = if (status?.isPracticeOpen == true) "Buka" else "Tutup"
-                val statusColor = if (status?.isPracticeOpen == true) Color(0xFF4CAF50) else Color.Red
-                Text(statusText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = statusColor)
-                Text("Sedang Dilayani: No. ${status?.currentServingNumber ?: 0}")
-                Text("Total Dilayani: ${status?.totalServed ?: 0} pasien")
+            Text(
+                text = "${uiState.greeting},\n${uiState.doctorName} 👋",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(onClick = onLogoutClick) {
+                Text("Logout")
             }
-            Button(onClick = onTogglePractice) {
-                val buttonText = if (status?.isPracticeOpen == true) "Tutup Praktik" else "Buka Praktik"
-                Text(buttonText)
-            }
+        }
+        Spacer(Modifier.height(16.dp))
+        StatsHeader(
+            total = uiState.totalPatientsToday,
+            waiting = uiState.patientsWaiting,
+            finished = uiState.patientsFinished
+        )
+    }
+}
+
+@Composable
+fun StatsHeader(total: Int, waiting: Int, finished: Int) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        StatCard(
+            label = "Total Pasien",
+            value = total.toString(),
+            icon = Icons.Outlined.Groups,
+            modifier = Modifier.weight(1f)
+        )
+        StatCard(
+            label = "Menunggu",
+            value = waiting.toString(),
+            icon = Icons.Outlined.HourglassTop,
+            modifier = Modifier.weight(1f)
+        )
+        StatCard(
+            label = "Selesai",
+            value = finished.toString(),
+            icon = Icons.Outlined.CheckCircle,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+fun StatCard(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier
+) {
+    Card(modifier = modifier) {
+        Column(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(imageVector = icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(text = label, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -120,16 +199,16 @@ fun PracticeStatusCard(status: com.example.project_mobileapps.data.model.Practic
 @Composable
 fun PatientQueueCard(
     item: QueueItem,
+    onClick: () -> Unit,
     onConfirmArrival: (Int) -> Unit,
-    onFinishConsultation: (Int) -> Unit
+    onFinishConsultation: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var consultationTime by remember { mutableStateOf("00:00") }
-    var isTimerRunning by remember { mutableStateOf(false) }
 
     LaunchedEffect(item.status, item.startedAt) {
-        isTimerRunning = item.status == QueueStatus.DILAYANI && item.startedAt != null
-        if (isTimerRunning) {
-            while (isTimerRunning) {
+        if (item.status == QueueStatus.DILAYANI && item.startedAt != null) {
+            while (true) {
                 val diff = Date().time - (item.startedAt?.time ?: 0)
                 val minutes = TimeUnit.MILLISECONDS.toMinutes(diff)
                 val seconds = TimeUnit.MILLISECONDS.toSeconds(diff) % 60
@@ -140,33 +219,33 @@ fun PatientQueueCard(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = when (item.status) {
-                QueueStatus.DILAYANI -> MaterialTheme.colorScheme.primaryContainer
-                QueueStatus.SELESAI -> MaterialTheme.colorScheme.surfaceVariant
-                else -> MaterialTheme.colorScheme.surface
-            }
-        )
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
+                Text(
+                    text = "No. ${item.queueNumber}",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(end = 16.dp)
+                )
                 Column(modifier = Modifier.weight(1f)) {
+                    Text(item.userName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "No. ${item.queueNumber}",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        "Keluhan: ${item.keluhan}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text(item.userName, style = MaterialTheme.typography.bodyLarge)
                 }
-                Text(item.status.name, fontWeight = FontWeight.Medium)
+                StatusChip(status = item.status)
             }
 
-            // Spacer untuk memberi jarak
             if (item.status == QueueStatus.DIPANGGIL || item.status == QueueStatus.DILAYANI) {
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -193,10 +272,7 @@ fun PatientQueueCard(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(
-                            onClick = {
-                                isTimerRunning = false
-                                onFinishConsultation(item.queueNumber)
-                            },
+                            onClick = { onFinishConsultation(item.queueNumber) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Selesai Konsultasi")
@@ -207,4 +283,24 @@ fun PatientQueueCard(
             }
         }
     }
+}
+
+@Composable
+fun StatusChip(status: QueueStatus) {
+    val (text, backgroundColor, contentColor) = when (status) {
+        QueueStatus.MENUNGGU -> Triple("Menunggu", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+        QueueStatus.DIPANGGIL -> Triple("Dipanggil", Color(0xFFFFF9C4), Color.Black) // Kuning
+        QueueStatus.DILAYANI -> Triple("Dilayani", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+        QueueStatus.SELESAI -> Triple("Selesai", Color(0xFFC8E6C9), Color.Black) // Hijau muda
+        QueueStatus.DIBATALKAN -> Triple("Batal", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
+    }
+    Text(
+        text = text,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(backgroundColor)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        style = MaterialTheme.typography.labelLarge,
+        color = contentColor
+    )
 }

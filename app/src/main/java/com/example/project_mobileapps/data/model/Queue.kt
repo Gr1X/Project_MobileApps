@@ -13,7 +13,8 @@ data class QueueItem(
     var status: QueueStatus = QueueStatus.MENUNGGU,
     val createdAt: Date = Date(),
     var calledAt: Date? = null, // Waktu saat giliran dipanggil
-    var startedAt: Date? = null  // Waktu saat konsultasi dimulai (pasien hadir)
+    var startedAt: Date? = null,  // Waktu saat konsultasi dimulai (pasien hadir)
+    var finishedAt: Date? = null
 )
 
 data class PracticeStatus(

@@ -1,6 +1,10 @@
 package com.example.project_mobileapps.data.repo
 
+import com.example.project_mobileapps.data.local.DailyReport
+import com.example.project_mobileapps.data.local.DailyScheduleData
 import com.example.project_mobileapps.data.local.DummyHistoryDatabase
+import com.example.project_mobileapps.data.local.DummyReportDatabase
+import com.example.project_mobileapps.data.local.DummyScheduleDatabase
 import com.example.project_mobileapps.data.model.HistoryItem
 import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.model.QueueItem
@@ -28,23 +32,18 @@ object DummyQueueRepository : QueueRepository {
     override suspend fun checkForLatePatients(doctorId: String) {
         val now = Date().time
         _dailyQueuesFlow.update { currentList ->
-            // 1. Pisahkan daftar menjadi dua: yang terlambat dan yang tepat waktu
             val (latePatients, onTimePatients) = currentList.partition {
                 it.status == QueueStatus.DIPANGGIL &&
                         it.calledAt != null &&
                         (now - it.calledAt!!.time > FIFTEEN_MINUTES_IN_MS)
             }
 
-            // 2. Jika ada pasien yang terlambat...
             if (latePatients.isNotEmpty()) {
-                // Ubah status mereka kembali ke MENUNGGU
                 val updatedLatePatients = latePatients.map {
                     it.copy(status = QueueStatus.MENUNGGU, calledAt = null)
                 }
-                // 3. Gabungkan kembali: yang tepat waktu di depan, yang terlambat di belakang
                 onTimePatients + updatedLatePatients
             } else {
-                // Jika tidak ada yang terlambat, jangan lakukan apa-apa
                 currentList
             }
         }
@@ -88,7 +87,6 @@ object DummyQueueRepository : QueueRepository {
         return Result.success(newQueueItem)
     }
 
-
     override suspend fun cancelQueue(userId: String, doctorId: String): Result<Unit> {
         _dailyQueuesFlow.update { list -> list.map {
             if (it.userId == userId && it.doctorId == doctorId) it.copy(status = QueueStatus.DIBATALKAN) else it
@@ -108,13 +106,7 @@ object DummyQueueRepository : QueueRepository {
         val currentlyServing = relevantQueue.find { it.status == QueueStatus.DILAYANI }
         if (currentlyServing != null) return Result.failure(Exception("Masih ada pasien yang dilayani."))
 
-        // =======================================================
-        // PERBAIKI LOGIKA PEMILIHAN PASIEN DI SINI
-        // =======================================================
-        // Cara lama (salah): .minByOrNull { it.queueNumber }
-        // Cara baru (benar): ambil item pertama yang statusnya MENUNGGU dari daftar yang sudah diurutkan
         val nextPatient = relevantQueue.firstOrNull { it.status == QueueStatus.MENUNGGU }
-        // =======================================================
 
         if (nextPatient == null) return Result.failure(Exception("Tidak ada antrian berikutnya."))
 
@@ -128,6 +120,11 @@ object DummyQueueRepository : QueueRepository {
             }
         }
         return Result.success(Unit)
+    }
+
+    override suspend fun getWeeklyReport(): List<DailyReport> {
+        delay(300)
+        return DummyReportDatabase.weeklyReport
     }
 
     override suspend fun confirmPatientArrival(queueId: Int, doctorId: String): Result<Unit> {
@@ -158,7 +155,7 @@ object DummyQueueRepository : QueueRepository {
         _dailyQueuesFlow.update { list ->
             list.map {
                 if (it.queueNumber == queueId && it.doctorId == doctorId) {
-                    it.copy(status = QueueStatus.SELESAI)
+                    it.copy(status = QueueStatus.SELESAI, finishedAt = Date())
                 } else {
                     it
                 }
@@ -185,7 +182,6 @@ object DummyQueueRepository : QueueRepository {
         return DummyHistoryDatabase.history
     }
 
-    // TAMBAHKAN IMPLEMENTASI FUNGSI BARU INI
     override suspend fun addManualQueue(patientName: String, complaint: String): Result<QueueItem> {
         delay(500)
         val doctorId = "doc_123"
@@ -197,7 +193,6 @@ object DummyQueueRepository : QueueRepository {
         }
 
         val newQueueNumber = currentStatus.lastQueueNumber + 1
-        // Buat user ID palsu untuk pasien manual
         val manualUserId = "manual_${System.currentTimeMillis()}"
 
         val newQueueItem = QueueItem(
@@ -213,5 +208,31 @@ object DummyQueueRepository : QueueRepository {
             it.toMutableMap().apply { this[doctorId] = currentStatus.copy(lastQueueNumber = newQueueNumber) }
         }
         return Result.success(newQueueItem)
+    }
+
+    override suspend fun resetQueue() {
+        delay(500)
+        _dailyQueuesFlow.value = emptyList()
+        _practiceStatusFlow.update { statusMap ->
+            statusMap.mapValues { (doctorId, status) ->
+                status.copy(
+                    currentServingNumber = 0,
+                    lastQueueNumber = 0,
+                    totalServed = 0,
+                    isPracticeOpen = true
+                )
+            }
+        }
+    }
+
+    override suspend fun getDoctorSchedule(doctorId: String): List<DailyScheduleData> {
+        delay(300)
+        return DummyScheduleDatabase.weeklySchedules[doctorId] ?: emptyList()
+    }
+
+    override suspend fun updateDoctorSchedule(doctorId: String, newSchedule: List<DailyScheduleData>): Result<Unit> {
+        delay(500)
+        DummyScheduleDatabase.weeklySchedules[doctorId] = newSchedule.toMutableList()
+        return Result.success(Unit)
     }
 }

@@ -1,7 +1,9 @@
 package com.example.project_mobileapps.data.repo
 
 import com.example.project_mobileapps.data.local.DummyUserDatabase
+import com.example.project_mobileapps.data.model.Role
 import com.example.project_mobileapps.data.model.User
+import com.example.project_mobileapps.di.AppContainer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,13 +24,36 @@ object AuthRepository {
         }
     }
 
-    fun logout() {
+    suspend fun logout() {
+//        AppContainer.queueRepository.resetQueue()
         _currentUser.value = null
     }
 
-    suspend fun register(name: String, email: String, password: String): Result<Boolean> {
-        kotlinx.coroutines.delay(1000) // Simulasi loading
-        // Dalam sistem dummy, kita anggap registrasi selalu berhasil
-        return Result.success(true)
+    suspend fun register(name: String, email: String, password: String): Result<User> {
+        delay(1000)
+        val newUid = "pasien_${System.currentTimeMillis()}"
+        val newUser = User(
+            uid = newUid,
+            name = name,
+            email = email,
+            password = password,
+            role = Role.PASIEN
+        )
+        DummyUserDatabase.users.add(newUser)
+        return Result.success(newUser)
+    }
+
+    fun getAllUsers(): List<User> {
+        return DummyUserDatabase.users
+    }
+
+    suspend fun searchUsersByName(query: String): List<User> {
+        delay(300)
+        if (query.isBlank()) {
+            return emptyList()
+        }
+        return DummyUserDatabase.users.filter {
+            it.name.contains(query, ignoreCase = true) && it.role == Role.PASIEN
+        }
     }
 }

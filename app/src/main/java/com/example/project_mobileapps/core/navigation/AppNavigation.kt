@@ -17,19 +17,20 @@ import androidx.navigation.navigation
 import com.example.project_mobileapps.data.model.Role
 import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.di.AppContainer
-import com.example.project_mobileapps.features.admin.AdminDashboardScreen
 import com.example.project_mobileapps.features.admin.AdminMainScreen
 import com.example.project_mobileapps.features.auth.AuthScreen
 import com.example.project_mobileapps.features.auth.AuthViewModelFactory
 import com.example.project_mobileapps.features.doctor.DoctorDashboardScreen
-import com.example.project_mobileapps.features.doctorDetail.DoctorDetailScreen
+import com.example.project_mobileapps.features.doctor.DoctorMainScreen
+import com.example.project_mobileapps.features.doctor.DoctorViewModel
+import com.example.project_mobileapps.features.doctor.DoctorViewModelFactory
+import com.example.project_mobileapps.features.patient.doctorDetail.DoctorDetailScreen
 import com.example.project_mobileapps.features.getstarted.GetStartedScreen
-import com.example.project_mobileapps.features.home.MainScreen
-import com.example.project_mobileapps.features.home.PlaceholderScreen
-import com.example.project_mobileapps.features.news.ArticleDetailScreen
-import com.example.project_mobileapps.features.news.NewsScreen
+import com.example.project_mobileapps.features.patient.home.MainScreen
+import com.example.project_mobileapps.features.patient.news.ArticleDetailScreen
+import com.example.project_mobileapps.features.patient.news.NewsScreen
 import com.example.project_mobileapps.features.profile.HistoryScreen
-import com.example.project_mobileapps.features.queue.QueueConfirmationScreen
+import com.example.project_mobileapps.features.patient.queue.QueueConfirmationScreen
 import kotlinx.coroutines.launch
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
@@ -70,13 +71,10 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             }
         }
 
-            // --- ALUR APLIKASI UTAMA (SETELAH LOGIN) ---
         navigation(startDestination = "main_host", route = "main_flow") {
-
             composable("main_host") {
                 MainScreen(rootNavController = navController)
             }
-
             composable("doctorDetail/{doctorId}",
                 arguments = listOf(navArgument("doctorId") { type = NavType.StringType })
             ) {
@@ -102,7 +100,6 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
-
             composable(
                 "queue_confirmation/{queueNumber}",
                 arguments = listOf(navArgument("queueNumber") { type = NavType.StringType })
@@ -117,13 +114,11 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     }
                 )
             }
-
             composable("history") {
                 HistoryScreen(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
-
             composable("news") {
                 NewsScreen(
                     onNewsClick = { encodedUrl ->
@@ -131,46 +126,45 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     }
                 )
             }
-
             composable(
                 "articleDetail/{encodedUrl}",
                 arguments = listOf(navArgument("encodedUrl") { type = NavType.StringType })
             ) { backStackEntry ->
                 val encodedUrl = backStackEntry.arguments?.getString("encodedUrl") ?: ""
-                // Decode the URL before passing it to the screen
                 val decodedUrl = URLDecoder.decode(encodedUrl, StandardCharsets.UTF_8.toString())
-
-                 ArticleDetailScreen(
+                ArticleDetailScreen(
                     url = decodedUrl,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
         }
 
-        // --- ALUR DOKTER ---
-        navigation(startDestination = "doctor_dashboard", route = "doctor_flow") {
-
-            composable("doctor_dashboard") {
-                DoctorDashboardScreen(
+        navigation(startDestination = "admin_dashboard", route = "admin_flow") {
+            composable("admin_dashboard") {
+                val scope = rememberCoroutineScope()
+                AdminMainScreen(
                     onLogoutClick = {
-                        AuthRepository.logout()
-                        navController.navigate("auth_flow") {
-                            popUpTo("doctor_flow") { inclusive = true }
+                        scope.launch {
+                            AuthRepository.logout()
+                            navController.navigate("auth_flow") {
+                                popUpTo("admin_flow") { inclusive = true }
+                            }
                         }
                     }
                 )
             }
-
         }
 
-        // Di dalam NavHost -> cari navigation(route = "admin_flow")
-        navigation(startDestination = "admin_dashboard", route = "admin_flow") {
-            composable("admin_dashboard") {
-                AdminMainScreen(
+        navigation(startDestination = "doctor_main", route = "doctor_flow") {
+            composable("doctor_main") { // Buat route baru untuk wadah utama
+                val scope = rememberCoroutineScope()
+                DoctorMainScreen(
                     onLogoutClick = {
-                        AuthRepository.logout()
-                        navController.navigate("auth_flow") {
-                            popUpTo("admin_flow") { inclusive = true }
+                        scope.launch {
+                            AuthRepository.logout()
+                            navController.navigate("auth_flow") {
+                                popUpTo("doctor_flow") { inclusive = true }
+                            }
                         }
                     }
                 )

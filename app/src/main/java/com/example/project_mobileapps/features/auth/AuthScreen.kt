@@ -14,11 +14,8 @@ fun AuthScreen(
 ) {
     val authState by authViewModel.authState.collectAsState()
     val context = LocalContext.current
-
-    // State untuk mengatur layar mana yang tampil
     var showLoginScreen by remember { mutableStateOf(startScreen == "login") }
 
-    // Efek ini akan berjalan saat status otentikasi sukses
     LaunchedEffect(authState.loggedInUser) {
         authState.loggedInUser?.let { user ->
             Toast.makeText(context, "Login Berhasil!",
