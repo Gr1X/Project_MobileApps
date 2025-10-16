@@ -20,27 +20,53 @@ import java.util.Calendar
 object DummyQueueRepository : QueueRepository {
 
     private val doctorList = mapOf("doc_123" to "Dr. Budi Santoso")
-    private val FIFTEEN_MINUTES_IN_MS = 60 * 1000
+    private val FIFTEEN_MINUTES_IN_MS = 1 * 60 * 1000
     private val _practiceStatusFlow = MutableStateFlow(
-        doctorList.mapValues { PracticeStatus(doctorId = it.key, doctorName = it.value, isPracticeOpen = true) }
+        mapOf("doc_123" to PracticeStatus(
+            doctorId = "doc_123",
+            doctorName = "Dr. Budi Santoso",
+            currentServingNumber = 4,
+            lastQueueNumber = 8,
+            isPracticeOpen = true,
+            totalServed = 3
+        ))
     )
-    override val practiceStatusFlow: StateFlow<Map<String, PracticeStatus>> = _practiceStatusFlow.asStateFlow()
-    private val _dailyQueuesFlow = MutableStateFlow<List<QueueItem>>(emptyList())
-    override val dailyQueuesFlow: StateFlow<List<QueueItem>> = _dailyQueuesFlow.asStateFlow()
 
+    override val practiceStatusFlow: StateFlow<Map<String, PracticeStatus>> = _practiceStatusFlow.asStateFlow()
+    private val _dailyQueuesFlow = MutableStateFlow(
+        listOf(
+            // Skenario Antrian Hari Ini
+            QueueItem(1, "pasien_selesai_1", "Rina Amelia", "doc_123", "Pusing", QueueStatus.SELESAI, finishedAt = Date(System.currentTimeMillis() - 3600000 * 3)),
+            QueueItem(2, "pasien_selesai_2", "Joko Susilo", "doc_123", "Sakit Perut", QueueStatus.SELESAI, finishedAt = Date(System.currentTimeMillis() - 3600000 * 2)),
+            QueueItem(3, "pasien_selesai_3", "Siti Nurhaliza", "doc_123", "Cek Rutin", QueueStatus.SELESAI, finishedAt = Date(System.currentTimeMillis() - 3600000)),
+            QueueItem(4, "pasien03", "Agus Setiawan", "doc_123", "Nyeri Sendi", QueueStatus.DILAYANI, startedAt = Date(System.currentTimeMillis() - 600000)),
+            QueueItem(5, "pasien04", "Dewi Anggraini", "doc_123", "Batuk Pilek", QueueStatus.MENUNGGU),
+            QueueItem(6, "pasien05", "Eko Prasetyo", "doc_123", "Konsultasi", QueueStatus.MENUNGGU),
+            QueueItem(7, "pasien01", "Budi Santoso", "doc_123", "Mata Merah", QueueStatus.MENUNGGU),
+            QueueItem(8, "pasien02", "Citra Lestari", "doc_123", "Demam", QueueStatus.MENUNGGU)
+        )
+    )
+
+    override val dailyQueuesFlow: StateFlow<List<QueueItem>> = _dailyQueuesFlow.asStateFlow()
 
     override suspend fun checkForLatePatients(doctorId: String) {
         val now = Date().time
         _dailyQueuesFlow.update { currentList ->
-            val (latePatients, onTimePatients) = currentList.partition {
-                it.status == QueueStatus.DIPANGGIL &&
-                        it.calledAt != null &&
-                        (now - it.calledAt!!.time > FIFTEEN_MINUTES_IN_MS)
+            val (latePatients, onTimePatients) = currentList.partition { item ->
+                item.status == QueueStatus.DIPANGGIL &&
+                        item.calledAt != null &&
+                        (now - item.calledAt!!.time > FIFTEEN_MINUTES_IN_MS) &&
+                        !item.hasBeenLate
             }
 
             if (latePatients.isNotEmpty()) {
-                val updatedLatePatients = latePatients.map {
-                    it.copy(status = QueueStatus.MENUNGGU, calledAt = null)
+                val updatedLatePatients = latePatients.map { latePatient ->
+                    NotificationRepository.addNotification(
+                        message = "Anda terlambat. Nomor antrian ${latePatient.queueNumber} dipindahkan ke akhir.",
+                        targetUserId = latePatient.userId
+                    )
+
+                    latePatient.copy(status = QueueStatus.MENUNGGU, calledAt = null, hasBeenLate = true)
                 }
                 onTimePatients + updatedLatePatients
             } else {
@@ -110,6 +136,12 @@ object DummyQueueRepository : QueueRepository {
 
         if (nextPatient == null) return Result.failure(Exception("Tidak ada antrian berikutnya."))
 
+        NotificationRepository.addNotification(
+            message = "Nomor antrian ${nextPatient.queueNumber} telah dipanggil. Segera menuju ruang periksa.",
+            targetUserId = nextPatient.userId
+        )
+
+
         _dailyQueuesFlow.update { list ->
             list.map {
                 if (it.queueNumber == nextPatient.queueNumber && it.doctorId == doctorId) {
@@ -178,8 +210,20 @@ object DummyQueueRepository : QueueRepository {
     }
 
     override suspend fun getVisitHistory(userId: String): List<HistoryItem> {
-        delay(500)
-        return DummyHistoryDatabase.history
+        delay(300)
+        val dateFormat = java.text.SimpleDateFormat("dd MMMM yyyy", java.util.Locale("id", "ID"))
+
+        return _dailyQueuesFlow.value
+            .filter { it.userId == userId && it.status == QueueStatus.SELESAI }
+            .map { queueItem ->
+                HistoryItem(
+                    visitId = queueItem.queueNumber.toString(),
+                    doctorName = doctorList[queueItem.doctorId] ?: "Dokter",
+                    visitDate = dateFormat.format(queueItem.finishedAt ?: queueItem.createdAt),
+                    initialComplaint = queueItem.keluhan
+                )
+            }
+            .sortedByDescending { it.visitDate }
     }
 
     override suspend fun addManualQueue(patientName: String, complaint: String): Result<QueueItem> {
@@ -235,4 +279,6 @@ object DummyQueueRepository : QueueRepository {
         DummyScheduleDatabase.weeklySchedules[doctorId] = newSchedule.toMutableList()
         return Result.success(Unit)
     }
+
+
 }

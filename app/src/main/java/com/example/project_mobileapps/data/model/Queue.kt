@@ -12,9 +12,10 @@ data class QueueItem(
     val keluhan: String,
     var status: QueueStatus = QueueStatus.MENUNGGU,
     val createdAt: Date = Date(),
-    var calledAt: Date? = null, // Waktu saat giliran dipanggil
-    var startedAt: Date? = null,  // Waktu saat konsultasi dimulai (pasien hadir)
-    var finishedAt: Date? = null
+    var calledAt: Date? = null,
+    var startedAt: Date? = null,
+    var finishedAt: Date? = null,
+    var hasBeenLate: Boolean = false
 )
 
 data class PracticeStatus(
@@ -23,9 +24,9 @@ data class PracticeStatus(
     var currentServingNumber: Int = 0,
     var lastQueueNumber: Int = 0,
     val dailyPatientLimit: Int = 50,
-    val estimatedServiceTimeInMinutes: Int = 30, // Kita sesuaikan jadi 30 menit
+    val estimatedServiceTimeInMinutes: Int = 30,
     val isPracticeOpen: Boolean = false,
     var totalServed: Int = 0,
-    val openingHour: Int = 9,  // <-- TAMBAHKAN JAM BUKA (09:00)
+    val openingHour: Int = 9,
     val closingHour: Int = 200 // <-- TAMBAHKAN JAM TUTUP (17:00)
 )

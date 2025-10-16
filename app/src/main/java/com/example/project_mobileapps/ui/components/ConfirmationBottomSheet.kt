@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.project_mobileapps.features.getstarted.PrimaryGreen
+import com.example.project_mobileapps.ui.themes.PrimaryPeriwinkle // Pastikan import ini sesuai
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,15 +49,13 @@ fun ConfirmationBottomSheet(
             // Judul Dialog
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+                style = MaterialTheme.typography.titleLarge
             )
             Spacer(modifier = Modifier.height(16.dp))
             // Subjudul
             Text(
                 text = subtitle,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(4.dp))
             // Teks Deskripsi
@@ -72,33 +70,23 @@ fun ConfirmationBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Button(
-                    onClick = onConfirm, // Langsung panggil onConfirm
+                    onClick = onConfirm,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(42.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = PrimaryGreen,
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(28.dp)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Text("Get the Number")
+                    Text("Konfirmasi", style = MaterialTheme.typography.labelLarge)
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedButton(
-                    onClick = { closeSheet() }, // Panggil fungsi closeSheet untuk membatalkan
+                    onClick = { closeSheet() },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(42.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = PrimaryGreen
-                    ),
-                    border = ButtonDefaults.outlinedButtonBorder.copy(
-                        brush = SolidColor(PrimaryGreen)
-                    ),
-                    shape = RoundedCornerShape(28.dp)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Text("Cancel")
+                    Text("Batal", style = MaterialTheme.typography.labelLarge)
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))

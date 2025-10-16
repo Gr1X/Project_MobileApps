@@ -67,8 +67,11 @@ fun DoctorMainScreen(
                             com.example.project_mobileapps.data.repo.AuthRepository
                         )
                     )
-                    // Panggil DoctorDashboardScreen tanpa onLogoutClick
-                    DoctorDashboardScreen(viewModel = doctorViewModel)
+
+                    DoctorDashboardScreen(
+                        viewModel = doctorViewModel,
+                        navController = doctorNavController
+                    )
                 }
             }
         }

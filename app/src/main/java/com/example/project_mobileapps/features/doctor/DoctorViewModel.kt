@@ -33,21 +33,18 @@ class DoctorViewModel(
     private val authRepository: AuthRepository
 ) : ViewModel() {
 
-    // State terpisah untuk pasien yang dipilih
     private val _selectedPatient = MutableStateFlow<PatientQueueDetails?>(null)
 
-    // uiState sekarang adalah gabungan dari SEMUA sumber data
     val uiState: StateFlow<DoctorUiState> = combine(
         queueRepository.dailyQueuesFlow,
         queueRepository.practiceStatusFlow,
         authRepository.currentUser,
-        _selectedPatient // Tambahkan ini sebagai sumber data keempat
-    ) { queues, statuses, doctorUser, selectedPatient -> // Sekarang ada 4 parameter
+        _selectedPatient
+    ) { queues, statuses, doctorUser, selectedPatient ->
 
         val doctorId = "doc_123"
         val allUsers = authRepository.getAllUsers()
 
-        // Buat daftar detail dari awal
         val detailedQueueList = queues
             .filter { it.doctorId == doctorId }
             .map { queueItem ->
@@ -61,11 +58,11 @@ class DoctorViewModel(
         val waiting = detailedQueueList.count { it.queueItem.status == QueueStatus.MENUNGGU || it.queueItem.status == QueueStatus.DIPANGGIL }
         val finished = detailedQueueList.count { it.queueItem.status == QueueStatus.SELESAI }
 
-        // Buat UiState yang baru dari hasil combine
+
         DoctorUiState(
             greeting = getGreetingBasedOnTime(),
             doctorName = doctorUser?.name ?: "Dokter",
-            queueList = detailedQueueList, // <-- Gunakan list yang sudah detail
+            queueList = detailedQueueList,
             practiceStatus = statuses[doctorId],
             isLoading = false,
             totalPatientsToday = total,
@@ -78,9 +75,6 @@ class DoctorViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = DoctorUiState()
     )
-
-    // Blok init sekarang kosong
-    init {}
 
     private fun getGreetingBasedOnTime(): String {
         val calendar = Calendar.getInstance()

@@ -1,4 +1,3 @@
-// File: features/doctor/DoctorDashboardScreen.kt
 package com.example.project_mobileapps.features.doctor
 
 import androidx.compose.foundation.background
@@ -22,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 import com.example.project_mobileapps.data.model.QueueItem
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.features.admin.manageSchedule.PatientDetailBottomSheet
@@ -33,13 +33,13 @@ import java.util.concurrent.TimeUnit
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DoctorDashboardScreen(
-    // HAPUS onLogoutClick dari sini
-    viewModel: DoctorViewModel
+    viewModel: DoctorViewModel,
+    navController: NavHostController
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    // Tampilkan BottomSheet jika ada pasien yang dipilih
+    // Tampilkan BottomSheet jika ada pasien yang dipilih di ViewModel
     if (uiState.selectedPatient != null) {
         PatientDetailBottomSheet(
             patientDetails = uiState.selectedPatient!!,
@@ -47,20 +47,21 @@ fun DoctorDashboardScreen(
         )
     }
 
-    // HAPUS Scaffold, ganti dengan LazyColumn
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // --- BAGIAN HEADER ---
         item {
             DoctorDashboardHeader(
                 uiState = uiState,
-                // Beri aksi kosong karena logout sudah ditangani di drawer
+                // Beri aksi kosong karena logout sudah ada di drawer
                 onLogoutClick = {}
             )
         }
 
+        // --- BAGIAN AKSI UTAMA ---
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
                 Button(
@@ -81,6 +82,7 @@ fun DoctorDashboardScreen(
             }
         }
 
+        // --- BAGIAN DAFTAR ANTRIAN ---
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
                 Divider(modifier = Modifier.padding(top = 8.dp))
@@ -104,7 +106,7 @@ fun DoctorDashboardScreen(
                 PatientQueueCard(
                     modifier = Modifier.padding(horizontal = 16.dp),
                     item = patientDetails.queueItem,
-                    onClick = { viewModel.selectPatient(patientDetails) },
+                    onClick = { viewModel.selectPatient(patientDetails) }, // <-- Tambahkan aksi klik
                     onConfirmArrival = { viewModel.confirmArrival(it) },
                     onFinishConsultation = { viewModel.finishConsultation(it) }
                 )
@@ -135,9 +137,11 @@ fun DoctorDashboardHeader(
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            TextButton(onClick = onLogoutClick) {
-                Text("Logout")
-            }
+            // Tombol logout ini sekarang tidak terlihat, tapi kita biarkan untuk masa depan
+            // Jika Anda ingin menampilkannya lagi, cukup hapus komentar di bawah
+            // TextButton(onClick = onLogoutClick) {
+            //     Text("Logout")
+            // }
         }
         Spacer(Modifier.height(16.dp))
         StatsHeader(
@@ -148,6 +152,9 @@ fun DoctorDashboardHeader(
     }
 }
 
+// =======================================================
+// PASTE FUNGSI STATSHEADER DAN STATCARD YANG HILANG DI SINI
+// =======================================================
 @Composable
 fun StatsHeader(total: Int, waiting: Int, finished: Int) {
     Row(
@@ -195,7 +202,11 @@ fun StatCard(
         }
     }
 }
+// =======================================================
 
+// =======================================================
+// PERBAIKI PARAMETER PATIENTQUEUECARD
+// =======================================================
 @Composable
 fun PatientQueueCard(
     item: QueueItem,
@@ -204,6 +215,7 @@ fun PatientQueueCard(
     onFinishConsultation: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // ... (Isi fungsi ini tidak berubah, hanya signature/parameternya)
     var consultationTime by remember { mutableStateOf("00:00") }
 
     LaunchedEffect(item.status, item.startedAt) {
