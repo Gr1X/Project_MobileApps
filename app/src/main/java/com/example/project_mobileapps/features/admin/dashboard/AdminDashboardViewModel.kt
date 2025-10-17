@@ -6,11 +6,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.project_mobileapps.data.local.DailyReport
+import com.example.project_mobileapps.data.local.DailyScheduleData
 import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.model.QueueItem
+import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.repo.QueueRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 data class AdminDashboardUiState(
     val queueList: List<QueueItem> = emptyList(),
@@ -19,7 +25,10 @@ data class AdminDashboardUiState(
     val totalPatientsToday: Int = 0,
     val patientsWaiting: Int = 0,
     val patientsFinished: Int = 0,
-    val weeklyReport: List<DailyReport> = emptyList()
+    val weeklyReport: List<DailyReport> = emptyList(),
+    val top5ActiveQueue: List<QueueItem> = emptyList(),
+    val doctorScheduleToday: DailyScheduleData? = null,
+    val avgServiceTimeMinutes: Long = 0
 )
 
 class AdminDashboardViewModel(private val queueRepository: QueueRepository) : ViewModel() {
@@ -28,49 +37,53 @@ class AdminDashboardViewModel(private val queueRepository: QueueRepository) : Vi
     val uiState: StateFlow<AdminDashboardUiState> = _uiState.asStateFlow()
 
     init {
-        fetchWeeklyReport()
+        fetchData()
+    }
 
+    private fun fetchData() {
         viewModelScope.launch {
+
             combine(
                 queueRepository.dailyQueuesFlow,
-                queueRepository.practiceStatusFlow
-            ) { queues, statuses ->
-                val doctorId = "doc_123"
-                val total = queues.count { it.status != com.example.project_mobileapps.data.model.QueueStatus.DIBATALKAN }
-                val waiting = queues.count { it.status == com.example.project_mobileapps.data.model.QueueStatus.MENUNGGU || it.status == com.example.project_mobileapps.data.model.QueueStatus.DIPANGGIL }
-                val finished = queues.count { it.status == com.example.project_mobileapps.data.model.QueueStatus.SELESAI }
+                queueRepository.practiceStatusFlow,
+                flow { emit(queueRepository.getWeeklyReport()) },
+                flow { emit(queueRepository.getDoctorSchedule("doc_123")) }
+            ) { queues, statuses, report, schedule ->
+                val finishedQueuesToday = queues.filter { it.status == QueueStatus.SELESAI }
+                val avgServiceTime = if (finishedQueuesToday.isNotEmpty()) {
+                    finishedQueuesToday
+                        .filter { it.startedAt != null && it.finishedAt != null }
+                        .map { TimeUnit.MILLISECONDS.toMinutes(it.finishedAt!!.time - it.startedAt!!.time) }
+                        .average()
+                        .toLong()
+                } else {
+                    0L
+                }
+                val total = queues.count { it.status != QueueStatus.DIBATALKAN }
+                val waiting = queues.count { it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL }
+                val finished = queues.count { it.status == QueueStatus.SELESAI }
+                val activeQueues = queues
+                    .filter { it.status != QueueStatus.SELESAI && it.status != QueueStatus.DIBATALKAN }
+                    .sortedBy { it.queueNumber }
+
+                val calendar = Calendar.getInstance()
+                val dayOfWeekName = SimpleDateFormat("EEEE", Locale("id", "ID")).format(calendar.time)
+                val todaySchedule = schedule.find { it.dayOfWeek.equals(dayOfWeekName, ignoreCase = true) }
 
                 _uiState.update { currentState ->
                     currentState.copy(
-                        queueList = queues.filter { it.doctorId == doctorId },
-                        practiceStatus = statuses[doctorId],
+                        practiceStatus = statuses["doc_123"],
                         isLoading = false,
                         totalPatientsToday = total,
                         patientsWaiting = waiting,
-                        patientsFinished = finished
+                        patientsFinished = finished,
+                        weeklyReport = report,
+                        top5ActiveQueue = activeQueues.take(5), // Ambil 5 teratas
+                        doctorScheduleToday = todaySchedule,
+                        avgServiceTimeMinutes = avgServiceTime
                     )
                 }
             }.collect()
-        }
-    }
-
-    private fun fetchWeeklyReport() {
-        viewModelScope.launch {
-            val report = queueRepository.getWeeklyReport()
-            _uiState.update { it.copy(weeklyReport = report) }
-        }
-    }
-
-    fun callNextPatient(context: Context) {
-        viewModelScope.launch {
-            val doctorId = "doc_123"
-            val result = queueRepository.callNextPatient(doctorId)
-
-            if (result.isSuccess) {
-                Toast.makeText(context, "Pasien berikutnya berhasil dipanggil!", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(context, result.exceptionOrNull()?.message, Toast.LENGTH_SHORT).show()
-            }
         }
     }
 }

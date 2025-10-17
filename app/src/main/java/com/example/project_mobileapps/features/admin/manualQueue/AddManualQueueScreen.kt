@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -21,9 +22,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.project_mobileapps.data.model.Gender
 import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.di.AppContainer
 import com.example.project_mobileapps.features.admin.manualQueue.AddManualQueueUiState
@@ -207,11 +210,18 @@ private fun SearchResults(results: List<com.example.project_mobileapps.data.mode
     }
 }
 
+// ... (import yang ada) ...
+
+// GANTI Composable NewPatientForm dengan yang ini
+// GANTI Composable NewPatientForm dengan yang ini
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NewPatientForm(uiState: AddManualQueueUiState, viewModel: AddManualQueueViewModel) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+    var isGenderMenuExpanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Pasien tidak ditemukan. Silakan daftarkan sebagai pasien baru.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         OutlinedTextField(
             value = uiState.newPatientName,
             onValueChange = viewModel::onNewPatientNameChange,
@@ -220,25 +230,53 @@ private fun NewPatientForm(uiState: AddManualQueueUiState, viewModel: AddManualQ
             leadingIcon = { Icon(Icons.Outlined.Person, "Nama Pasien") },
             singleLine = true
         )
-        Spacer(modifier = Modifier.height(12.dp))
         OutlinedTextField(
             value = uiState.newPatientEmail,
             onValueChange = viewModel::onNewPatientEmailChange,
             label = { Text("Email") },
             modifier = Modifier.fillMaxWidth(),
             leadingIcon = { Icon(Icons.Outlined.Email, "Email") },
-            singleLine = true
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
         )
-        Spacer(modifier = Modifier.height(12.dp))
+        // --- TAMBAHKAN INPUT BARU DI SINI ---
         OutlinedTextField(
-            value = uiState.newPatientPassword,
-            onValueChange = viewModel::onNewPatientPasswordChange,
-            label = { Text("Password (min. 6 karakter)") },
+            value = uiState.newPatientDob,
+            onValueChange = viewModel::onNewPatientDobChange,
+            label = { Text("Tgl. Lahir (YYYY-MM-DD)") },
             modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { Icon(Icons.Outlined.Lock, "Password") },
-            visualTransformation = PasswordVisualTransformation(),
+            leadingIcon = { Icon(Icons.Outlined.Cake, "Tanggal Lahir") },
             singleLine = true
         )
+        ExposedDropdownMenuBox(
+            expanded = isGenderMenuExpanded,
+            onExpandedChange = { isGenderMenuExpanded = !isGenderMenuExpanded }
+        ) {
+            OutlinedTextField(
+                value = uiState.newPatientGender.name,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Jenis Kelamin") },
+                leadingIcon = { Icon(Icons.Outlined.Wc, "Jenis Kelamin") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isGenderMenuExpanded) },
+                modifier = Modifier.fillMaxWidth().menuAnchor()
+            )
+            ExposedDropdownMenu(
+                expanded = isGenderMenuExpanded,
+                onDismissRequest = { isGenderMenuExpanded = false }
+            ) {
+                Gender.values().forEach { genderOption ->
+                    DropdownMenuItem(
+                        text = { Text(genderOption.name) },
+                        onClick = {
+                            viewModel.onNewPatientGenderChange(genderOption)
+                            isGenderMenuExpanded = false
+                        }
+                    )
+                }
+            }
+        }
+        // ------------------------------------
     }
 }
 

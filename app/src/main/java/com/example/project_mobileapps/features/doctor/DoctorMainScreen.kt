@@ -1,4 +1,4 @@
-// File BARU: features/doctor/DoctorMainScreen.kt
+// File: features/doctor/DoctorMainScreen.kt
 package com.example.project_mobileapps.features.doctor
 
 import androidx.compose.foundation.layout.padding
@@ -13,6 +13,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.project_mobileapps.core.navigation.DoctorMenu
+import com.example.project_mobileapps.data.repo.AuthRepository
+import com.example.project_mobileapps.di.AppContainer
+import com.example.project_mobileapps.features.admin.manageSchedule.ManagePracticeScheduleScreen
+import com.example.project_mobileapps.features.admin.manageSchedule.ManagePracticeScheduleViewModel
+import com.example.project_mobileapps.features.admin.manageSchedule.ManagePracticeScheduleViewModelFactory
+import com.example.project_mobileapps.features.admin.manageSchedule.ManageScheduleScreen
+import com.example.project_mobileapps.features.admin.manageSchedule.ManageScheduleViewModel
+import com.example.project_mobileapps.features.admin.manageSchedule.ManageScheduleViewModelFactory
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,7 +54,7 @@ fun DoctorMainScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { /* Biarkan kosong agar judul ada di dalam konten */ },
+                    title = { /* Biarkan kosong */ },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "Menu")
@@ -63,15 +71,39 @@ fun DoctorMainScreen(
                 composable(DoctorMenu.Dashboard.route) {
                     val doctorViewModel: DoctorViewModel = viewModel(
                         factory = DoctorViewModelFactory(
-                            com.example.project_mobileapps.di.AppContainer.queueRepository,
-                            com.example.project_mobileapps.data.repo.AuthRepository
+                            AppContainer.queueRepository,
+                            AuthRepository
                         )
                     )
-
                     DoctorDashboardScreen(
                         viewModel = doctorViewModel,
                         navController = doctorNavController
                     )
+                }
+
+                composable(DoctorMenu.Queue.route) {
+                    // ✅ AMBIL INFORMASI USER
+                    val user by AuthRepository.currentUser.collectAsState()
+                    val userRole = user?.role
+
+                    val manageScheduleViewModel: ManageScheduleViewModel = viewModel(
+                        factory = ManageScheduleViewModelFactory(
+                            AppContainer.queueRepository,
+                            AuthRepository
+                        )
+                    )
+                    // ✅ TERUSKAN ROLE KE SCREEN
+                    ManageScheduleScreen(
+                        viewModel = manageScheduleViewModel,
+                        currentUserRole = userRole
+                    )
+                }
+                composable(DoctorMenu.ManageSchedule.route) {
+                    // Gunakan kembali ViewModel dan Composable dari Admin
+                    val practiceViewModel: ManagePracticeScheduleViewModel = viewModel(
+                        factory = ManagePracticeScheduleViewModelFactory(AppContainer.queueRepository)
+                    )
+                    ManagePracticeScheduleScreen(viewModel = practiceViewModel)
                 }
             }
         }

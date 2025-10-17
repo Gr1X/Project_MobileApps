@@ -1,30 +1,26 @@
 // File: features/doctor/DoctorViewModel.kt
 package com.example.project_mobileapps.features.doctor
 
-import android.content.Context
-import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.project_mobileapps.data.local.DailyReport
 import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.data.repo.QueueRepository
 import com.example.project_mobileapps.features.admin.manageSchedule.PatientQueueDetails
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import java.util.Calendar
 
+// ✅ 1. Sesuaikan UI State dengan data baru yang dibutuhkan
 data class DoctorUiState(
     val greeting: String = "Selamat Datang",
     val doctorName: String = "Dokter",
-    val queueList: List<PatientQueueDetails> = emptyList(),
+    val topQueueList: List<PatientQueueDetails> = emptyList(),
     val practiceStatus: PracticeStatus? = null,
     val isLoading: Boolean = true,
-    val totalPatientsToday: Int = 0,
-    val patientsWaiting: Int = 0,
-    val patientsFinished: Int = 0,
+    val waitingInQueue: Int = 0, // Menggantikan 'patientsWaiting'
+    val nextQueueNumber: String = "-", // Data baru untuk pasien selanjutnya
     val selectedPatient: PatientQueueDetails? = null
 )
 
@@ -45,30 +41,35 @@ class DoctorViewModel(
         val doctorId = "doc_123"
         val allUsers = authRepository.getAllUsers()
 
-        val detailedQueueList = queues
-            .filter { it.doctorId == doctorId }
-            .map { queueItem ->
-                PatientQueueDetails(
-                    queueItem = queueItem,
-                    user = allUsers.find { it.uid == queueItem.userId }
-                )
-            }
+        // Ambil semua antrian aktif (yang belum selesai atau batal)
+        val activeQueues = queues
+            .filter { it.doctorId == doctorId && (it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL || it.status == QueueStatus.DILAYANI) }
+            .sortedBy { it.queueNumber }
 
-        val total = detailedQueueList.count { it.queueItem.status != QueueStatus.DIBATALKAN }
-        val waiting = detailedQueueList.count { it.queueItem.status == QueueStatus.MENUNGGU || it.queueItem.status == QueueStatus.DIPANGGIL }
-        val finished = detailedQueueList.count { it.queueItem.status == QueueStatus.SELESAI }
+        // Ambil 3 antrian teratas untuk ditampilkan di daftar
+        val topThreeQueues = activeQueues.take(3).map { queueItem ->
+            PatientQueueDetails(
+                queueItem = queueItem,
+                user = allUsers.find { it.uid == queueItem.userId }
+            )
+        }
 
+        // ✅ 2. Logika baru untuk mendapatkan nomor pasien selanjutnya
+        val nextPatient = activeQueues.find { it.status == QueueStatus.MENUNGGU }
+        val nextQueueNumberString = nextPatient?.queueNumber?.toString() ?: "-"
+
+        // ✅ 3. Logika baru untuk menghitung total antrian aktif
+        val totalWaitingInQueue = activeQueues.size
 
         DoctorUiState(
             greeting = getGreetingBasedOnTime(),
             doctorName = doctorUser?.name ?: "Dokter",
-            queueList = detailedQueueList,
+            topQueueList = topThreeQueues,
             practiceStatus = statuses[doctorId],
             isLoading = false,
-            totalPatientsToday = total,
-            patientsWaiting = waiting,
-            patientsFinished = finished,
-            selectedPatient = selectedPatient // <-- Masukkan pasien yang dipilih
+            waitingInQueue = totalWaitingInQueue, // Kirim data total antrian
+            nextQueueNumber = nextQueueNumberString, // Kirim data pasien selanjutnya
+            selectedPatient = selectedPatient
         )
     }.stateIn(
         scope = viewModelScope,
@@ -86,45 +87,12 @@ class DoctorViewModel(
         }
     }
 
-    // Fungsi fetchWeeklyReport tidak lagi dibutuhkan di sini karena dashboard dokter tidak menampilkannya
-    // private fun fetchWeeklyReport() { ... }
-
-    // Fungsi untuk mengubah state pasien yang dipilih
     fun selectPatient(patient: PatientQueueDetails) {
         _selectedPatient.value = patient
     }
 
     fun clearSelectedPatient() {
         _selectedPatient.value = null
-    }
-
-    fun callNextPatient(context: Context) {
-        viewModelScope.launch {
-            val doctorId = "doc_123"
-            val result = queueRepository.callNextPatient(doctorId)
-            if (result.isFailure) {
-                Toast.makeText(context, result.exceptionOrNull()?.message, Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    fun togglePracticeStatus() {
-        viewModelScope.launch {
-            val currentStatus = uiState.value.practiceStatus?.isPracticeOpen ?: false
-            queueRepository.setPracticeOpen("doc_123", !currentStatus)
-        }
-    }
-
-    fun confirmArrival(queueId: Int) {
-        viewModelScope.launch {
-            queueRepository.confirmPatientArrival(queueId, "doc_123")
-        }
-    }
-
-    fun finishConsultation(queueId: Int) {
-        viewModelScope.launch {
-            queueRepository.finishConsultation(queueId, "doc_123")
-        }
     }
 }
 

@@ -14,6 +14,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
+import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.model.Role
 import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.di.AppContainer
@@ -31,9 +32,13 @@ import com.example.project_mobileapps.features.patient.news.ArticleDetailScreen
 import com.example.project_mobileapps.features.patient.news.NewsScreen
 import com.example.project_mobileapps.features.profile.HistoryScreen
 import com.example.project_mobileapps.features.patient.queue.QueueConfirmationScreen
+import com.example.project_mobileapps.features.profile.EditProfileScreen
+import com.example.project_mobileapps.features.profile.HistoryDetailScreen
 import kotlinx.coroutines.launch
 import java.net.URLDecoder
+import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+
 
 @Composable
 fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifier) {
@@ -114,11 +119,62 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     }
                 )
             }
+
+            composable("editProfile") {
+                EditProfileScreen(onNavigateBack = { navController.popBackStack() })
+            }
+
             composable("history") {
                 HistoryScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onHistoryClick = { item ->
+                        val encoder = { text: String -> URLEncoder.encode(text, StandardCharsets.UTF_8.toString()) }
+
+                        val route = "historyDetail/" +
+                                "${encoder(item.visitId)}/" +
+                                "${encoder(item.visitDate)}/" +
+                                "${encoder(item.doctorName)}/" +
+                                "${encoder(item.initialComplaint)}/" +
+                                "${encoder(item.status.name)}"
+
+                        navController.navigate(route)
+                    }
+                )
+            }
+
+            composable(
+                route = "historyDetail/{visitId}/{visitDate}/{doctorName}/{complaint}/{status}",
+                arguments = listOf(
+                    navArgument("visitId") { type = NavType.StringType },
+                    navArgument("visitDate") { type = NavType.StringType },
+                    navArgument("doctorName") { type = NavType.StringType },
+                    navArgument("complaint") { type = NavType.StringType },
+                    navArgument("status") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val arguments = backStackEntry.arguments ?: return@composable
+                val decoder = { arg: String -> URLDecoder.decode(arg, StandardCharsets.UTF_8.toString()) }
+
+                val visitId = decoder(arguments.getString("visitId", ""))
+                val visitDate = decoder(arguments.getString("visitDate", ""))
+                val doctorName = decoder(arguments.getString("doctorName", ""))
+                val complaint = decoder(arguments.getString("complaint", ""))
+                val status = try {
+                    QueueStatus.valueOf(decoder(arguments.getString("status", "SELESAI")))
+                } catch (e: IllegalArgumentException) {
+                    QueueStatus.SELESAI
+                }
+
+                HistoryDetailScreen(
+                    visitId = visitId,
+                    visitDate = visitDate,
+                    doctorName = doctorName,
+                    complaint = complaint,
+                    status = status,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
+
             composable("news") {
                 NewsScreen(
                     onNewsClick = { encodedUrl ->
@@ -126,6 +182,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     }
                 )
             }
+
             composable(
                 "articleDetail/{encodedUrl}",
                 arguments = listOf(navArgument("encodedUrl") { type = NavType.StringType })
@@ -159,6 +216,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             composable("doctor_main") { // Buat route baru untuk wadah utama
                 val scope = rememberCoroutineScope()
                 DoctorMainScreen(
+
                     onLogoutClick = {
                         scope.launch {
                             AuthRepository.logout()

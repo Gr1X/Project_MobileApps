@@ -19,7 +19,6 @@ fun ConfirmationBottomSheet(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
     title: String,
-    subtitle: String,
     text: String
 ) {
     val scope = rememberCoroutineScope()
@@ -52,12 +51,7 @@ fun ConfirmationBottomSheet(
                 style = MaterialTheme.typography.titleLarge
             )
             Spacer(modifier = Modifier.height(16.dp))
-            // Subjudul
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(4.dp))
+
             // Teks Deskripsi
             Text(
                 text = text,

@@ -67,7 +67,7 @@ fun AuthScreen(
             }
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Form input dengan animasi
+
             AnimatedContent(
                 targetState = selectedTab,
                 transitionSpec = {
@@ -89,7 +89,6 @@ fun AuthScreen(
                 }
             }
 
-            // Opsi "Ingat Saya" dan "Lupa Password"
             if (selectedTab == AuthTab.LOGIN) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -118,7 +117,6 @@ fun AuthScreen(
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Tombol Aksi Utama
             val buttonText = if (selectedTab == AuthTab.LOGIN) "Login" else "Daftar"
             Button(
                 onClick = {
@@ -133,6 +131,17 @@ fun AuthScreen(
                 else Text(buttonText, style = MaterialTheme.typography.labelLarge)
             }
 
+            // --- TAMBAHKAN TOMBOL LOGIN CEPAT DI SINI ---
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { authViewModel.loginUser("pasien@gmail.com", "password") },
+                enabled = !authState.isLoading,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text("Login Cepat (Pasien)", style = MaterialTheme.typography.labelLarge)
+            }
+
             authState.error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 16.dp), textAlign = TextAlign.Center)
             }
@@ -142,21 +151,16 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Tombol Social Login
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp) // Memberi jarak 16.dp antar tombol
+                verticalArrangement = Arrangement.spacedBy(16.dp) // Mengatur jarak vertikal antar tombol
             ) {
                 SocialLoginButton(
                     text = "Google",
                     iconRes = R.drawable.google,
                     onClick = { /*TODO*/ },
-                    modifier = Modifier.weight(1f) // Tombol ini mengambil 50% sisa ruang
-                )
-                SocialLoginButton(
-                    text = "Facebook",
-                    iconRes = R.drawable.facebook,
-                    onClick = { /*TODO*/ },
-                    modifier = Modifier.weight(1f) // Tombol ini juga mengambil 50% sisa ruang
+                    // Modifier.weight tidak lagi diperlukan di sini
+                    modifier = Modifier.fillMaxWidth() // Buat tombol memenuhi lebar
                 )
             }
 

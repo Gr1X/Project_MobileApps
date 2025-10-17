@@ -74,7 +74,9 @@ class HomeViewModel (
                             it.status == QueueStatus.DILAYANI
                     }
 
-                val slotsLeft = (practiceStatus?.dailyPatientLimit ?: 0) - (practiceStatus?.lastQueueNumber ?: 0)
+                val totalNonCancelledQueues = queues.count { it.status != QueueStatus.DIBATALKAN }
+                val slotsLeft = (practiceStatus?.dailyPatientLimit ?: 0) - totalNonCancelledQueues
+
                 val activeQueue = queues.find { it.userId == user?.uid && it.status == QueueStatus.MENUNGGU }
                 val currentlyServingPatient = queues
                     .find { it.queueNumber == practiceStatus?.currentServingNumber && it.status == QueueStatus.DILAYANI }
@@ -102,11 +104,6 @@ class HomeViewModel (
             }
         }
     }
-
-
-    // Di dalam file: features/patient/home/HomeViewModel.kt
-
-    // Di dalam file: features/patient/home/HomeViewModel.kt
 
     private fun observeQueueForNotifications() {
         viewModelScope.launch {

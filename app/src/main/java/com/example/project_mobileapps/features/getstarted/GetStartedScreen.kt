@@ -10,7 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.project_mobileapps.R // Pastikan Anda punya gambar ilustrasi di drawable
+import com.example.project_mobileapps.R
 import com.example.project_mobileapps.ui.themes.PoppinsFamily
 import com.example.project_mobileapps.ui.themes.TextSecondary
 
@@ -21,7 +21,7 @@ fun GetStartedScreen(
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background // Menggunakan warna AppBackground dari tema
+        color = MaterialTheme.colorScheme.background
     ) {
         Column(
             modifier = Modifier
@@ -30,12 +30,11 @@ fun GetStartedScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Spacer untuk mendorong konten ke tengah, sisakan ruang untuk tombol di bawah
+
             Spacer(modifier = Modifier.weight(1f))
 
-            // Ilustrasi (Ganti R.drawable.doctor_illustration dengan gambar Anda sendiri)
             Image(
-                painter = painterResource(id = R.drawable.ic_launcher_foreground), // GANTI DENGAN GAMBAR ILUSTRASI ANDA
+                painter = painterResource(id = R.drawable.bg_get_started),
                 contentDescription = "Ilustrasi Dokter",
                 modifier = Modifier.size(250.dp)
             )
@@ -45,24 +44,21 @@ fun GetStartedScreen(
             // Judul Utama
             Text(
                 text = "Solusi Kesehatan dalam Genggaman Anda",
-                style = MaterialTheme.typography.headlineMedium, // Menggunakan font Poppins Bold, 28sp
-                textAlign = TextAlign.Center
+                style = MaterialTheme.typography.headlineMedium,
+                textAlign = TextAlign.Start
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Teks Deskripsi
             Text(
                 text = "Atur janji temu dan pantau antrian praktik dokter dengan mudah dan cepat.",
-                style = MaterialTheme.typography.bodyMedium, // Menggunakan font Poppins Regular, 14sp
-                color = TextSecondary, // Menggunakan warna abu-abu dari tema
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary,
                 textAlign = TextAlign.Center
             )
 
-            // Spacer untuk mendorong tombol ke bawah
             Spacer(modifier = Modifier.weight(1f))
 
-            // Tombol Aksi
             Button(
                 onClick = onGetStartedClick,
                 modifier = Modifier
@@ -72,7 +68,7 @@ fun GetStartedScreen(
             ) {
                 Text(
                     text = "Mulai Sekarang",
-                    style = MaterialTheme.typography.labelLarge // Menggunakan Poppins SemiBold
+                    style = MaterialTheme.typography.labelLarge
                 )
             }
 

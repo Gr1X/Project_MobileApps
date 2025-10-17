@@ -88,20 +88,36 @@ fun AdminMainScreen(
             ) {
 
                 composable(AdminMenu.Dashboard.route) {
-                    val dashboardViewModel: AdminDashboardViewModel = viewModel(
-                        factory = AdminDashboardViewModelFactory(AppContainer.queueRepository)
+                    AdminDashboardScreen(
+                        onNavigateToSchedule = {
+                            // Navigasi ke halaman atur jadwal
+                            adminNavController.navigate(AdminMenu.Management.items[0].route)
+                        },
+                        onNavigateToMonitoring = {
+                            // Navigasi ke halaman pantauan antrian
+                            adminNavController.navigate(AdminMenu.Monitoring.route)
+                        }
                     )
-                    AdminDashboardScreen(viewModel = dashboardViewModel)
                 }
 
+
+
                 composable(AdminMenu.Monitoring.route) {
+                    // ✅ AMBIL INFORMASI USER
+                    val user by AuthRepository.currentUser.collectAsState()
+                    val userRole = user?.role
+
                     val manageScheduleViewModel: ManageScheduleViewModel = viewModel(
                         factory = ManageScheduleViewModelFactory(
                             AppContainer.queueRepository,
                             AuthRepository
                         )
                     )
-                    ManageScheduleScreen(viewModel = manageScheduleViewModel)
+
+                    ManageScheduleScreen(
+                        viewModel = manageScheduleViewModel,
+                        currentUserRole = userRole
+                    )
                 }
 
                 composable(AdminMenu.Management.items[0].route) {

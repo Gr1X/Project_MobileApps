@@ -20,7 +20,7 @@ data class User(
     val uid: String,
     val name: String,
     val email: String,
-    val password: String,
+    val password: String? = null,
     val role: Role,
     val phoneNumber: String = "N/A",
     val gender: Gender = Gender.PRIA,

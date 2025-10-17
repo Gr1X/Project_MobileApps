@@ -4,6 +4,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.project_mobileapps.navigation.BottomNavItem
 
@@ -11,7 +12,7 @@ import com.example.project_mobileapps.navigation.BottomNavItem
 fun BottomNavBar(navController: NavController) {
     val items = listOf(
         BottomNavItem.Home,
-        BottomNavItem.Queue, // <-- PERBAIKI BARIS INI
+        BottomNavItem.Queue,
         BottomNavItem.Profile
     )
 
@@ -24,10 +25,17 @@ fun BottomNavBar(navController: NavController) {
                 icon = { Icon(item.icon, contentDescription = item.label) },
                 label = { Text(item.label) },
                 selected = currentRoute == item.route,
+                // --- PERBAIKAN UTAMA ADA DI BLOK onClick DI BAWAH INI ---
                 onClick = {
                     navController.navigate(item.route) {
-                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        // Pop up ke destinasi awal dari graph untuk menghindari penumpukan back stack
+                        // saat memilih item yang sama berulang kali.
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        // Hindari membuat salinan destinasi yang sama di atas tumpukan.
                         launchSingleTop = true
+                        // Kembalikan state saat memilih kembali item yang sebelumnya dipilih.
                         restoreState = true
                     }
                 }

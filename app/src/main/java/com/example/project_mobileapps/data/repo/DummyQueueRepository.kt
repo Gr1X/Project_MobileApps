@@ -14,28 +14,73 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Calendar
+import java.util.Locale
 
 object DummyQueueRepository : QueueRepository {
 
     private val doctorList = mapOf("doc_123" to "Dr. Budi Santoso")
-    private val FIFTEEN_MINUTES_IN_MS = 1 * 60 * 1000
+    private val FIFTEEN_MINUTES_IN_MS = 15 * 60 * 1000 // Koreksi: 15 menit
+
+    // --- PINDAHKAN FUNGSI INI KE ATAS ---
+    private fun isCurrentlyOpen(doctorId: String): Boolean {
+        val schedules = DummyScheduleDatabase.weeklySchedules[doctorId] ?: return false
+        val calendar = Calendar.getInstance()
+        val dayOfWeekInt = calendar.get(Calendar.DAY_OF_WEEK) // Minggu = 1, Sabtu = 7
+        val dayMapping = listOf("Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu")
+        val currentDayString = dayMapping[dayOfWeekInt - 1]
+
+        val todaySchedule = schedules.find { it.dayOfWeek.equals(currentDayString, ignoreCase = true) } ?: return false
+
+        if (!todaySchedule.isOpen) {
+            return false
+        }
+
+        try {
+            val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+            val now = timeFormat.parse(timeFormat.format(Date()))!!
+            val start = timeFormat.parse(todaySchedule.startTime)!!
+            val end = timeFormat.parse(todaySchedule.endTime)!!
+
+            return now.after(start) && now.before(end)
+        } catch (e: Exception) {
+            return false
+        }
+    }
+    // ------------------------------------
+
     private val _practiceStatusFlow = MutableStateFlow(
         mapOf("doc_123" to PracticeStatus(
             doctorId = "doc_123",
             doctorName = "Dr. Budi Santoso",
             currentServingNumber = 4,
             lastQueueNumber = 8,
-            isPracticeOpen = true,
+            isPracticeOpen = isCurrentlyOpen("doc_123"), // Sekarang panggilan ini valid
             totalServed = 3
+            // Anda belum menambahkan properti lain di sini, ini akan menyebabkan error
+            // Tambahkan properti yang hilang sesuai definisi PracticeStatus
+            , dailyPatientLimit = 50,
+            estimatedServiceTimeInMinutes = 30,
+            openingHour = 9,
+            closingHour = 17
         ))
     )
 
+    private fun getTodaySchedule(doctorId: String): DailyScheduleData? {
+        val schedules = DummyScheduleDatabase.weeklySchedules[doctorId] ?: return null
+        val calendar = Calendar.getInstance()
+        val dayOfWeekInt = calendar.get(Calendar.DAY_OF_WEEK)
+        val dayMapping = listOf("Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu")
+        val currentDayString = dayMapping[dayOfWeekInt - 1]
+        return schedules.find { it.dayOfWeek.equals(currentDayString, ignoreCase = true) }
+    }
+
     override val practiceStatusFlow: StateFlow<Map<String, PracticeStatus>> = _practiceStatusFlow.asStateFlow()
+
     private val _dailyQueuesFlow = MutableStateFlow(
         listOf(
-            // Skenario Antrian Hari Ini
             QueueItem(1, "pasien_selesai_1", "Rina Amelia", "doc_123", "Pusing", QueueStatus.SELESAI, finishedAt = Date(System.currentTimeMillis() - 3600000 * 3)),
             QueueItem(2, "pasien_selesai_2", "Joko Susilo", "doc_123", "Sakit Perut", QueueStatus.SELESAI, finishedAt = Date(System.currentTimeMillis() - 3600000 * 2)),
             QueueItem(3, "pasien_selesai_3", "Siti Nurhaliza", "doc_123", "Cek Rutin", QueueStatus.SELESAI, finishedAt = Date(System.currentTimeMillis() - 3600000)),
@@ -46,8 +91,8 @@ object DummyQueueRepository : QueueRepository {
             QueueItem(8, "pasien02", "Citra Lestari", "doc_123", "Demam", QueueStatus.MENUNGGU)
         )
     )
-
     override val dailyQueuesFlow: StateFlow<List<QueueItem>> = _dailyQueuesFlow.asStateFlow()
+
 
     override suspend fun checkForLatePatients(doctorId: String) {
         val now = Date().time
@@ -76,19 +121,25 @@ object DummyQueueRepository : QueueRepository {
     }
 
     override suspend fun takeQueueNumber(doctorId: String, userId: String, userName: String, keluhan: String): Result<QueueItem> {
-        delay(500)
+        delay(500) // Simulasi jeda jaringan
         val currentStatus = _practiceStatusFlow.value[doctorId] ?: return Result.failure(Exception("Dokter tidak ditemukan"))
         val currentQueue = _dailyQueuesFlow.value
 
+        // 1. Pengecekan dasar: Apakah praktik buka dan kuota harian masih ada
         if (!currentStatus.isPracticeOpen) return Result.failure(Exception("Pendaftaran sudah ditutup."))
         if (currentStatus.lastQueueNumber >= currentStatus.dailyPatientLimit) return Result.failure(Exception("Antrian penuh untuk hari ini."))
 
+        // --- LOGIKA BARU: PENGECEKAN SISA WAKTU PRAKTIK ---
         val calendar = Calendar.getInstance()
         val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
         val currentMinute = calendar.get(Calendar.MINUTE)
 
+        val todaySchedule = getTodaySchedule(doctorId) ?: return Result.failure(Exception("Jadwal hari ini tidak ditemukan."))
+        val closingTimeParts = todaySchedule.endTime.split(":")
+        val closingHour = closingTimeParts[0].toInt()
+        val closingMinute = closingTimeParts[1].toInt()
 
-        val totalMinutesRemaining = (currentStatus.closingHour * 60) - ((currentHour * 60) + currentMinute)
+        val totalMinutesRemaining = (closingHour * 60 + closingMinute) - ((currentHour * 60) + currentMinute)
 
         if (totalMinutesRemaining <= 0) {
             return Result.failure(Exception("Waktu praktik sudah habis."))
@@ -99,8 +150,15 @@ object DummyQueueRepository : QueueRepository {
         }
         val estimatedTimeForBacklog = waitingPatientsCount * currentStatus.estimatedServiceTimeInMinutes
 
+        // Cek apakah sisa waktu cukup untuk antrian yang ada + 1 pasien baru
         if ((estimatedTimeForBacklog + currentStatus.estimatedServiceTimeInMinutes) > totalMinutesRemaining) {
             return Result.failure(Exception("Pendaftaran ditutup karena waktu praktik tidak mencukupi untuk antrian saat ini."))
+        }
+        // -----------------------------------------------------
+
+        val existingQueue = currentQueue.find { it.userId == userId && it.status != QueueStatus.DIBATALKAN && it.status != QueueStatus.SELESAI }
+        if (existingQueue != null) {
+            return Result.failure(Exception("Anda sudah terdaftar dalam antrian."))
         }
 
         val newQueueNumber = currentStatus.lastQueueNumber + 1
@@ -183,11 +241,13 @@ object DummyQueueRepository : QueueRepository {
     override suspend fun finishConsultation(queueId: Int, doctorId: String): Result<Unit> {
         delay(500)
         val currentStatus = _practiceStatusFlow.value[doctorId] ?: return Result.failure(Exception("Dokter tidak ditemukan"))
+        var finishedItem: QueueItem? = null
 
         _dailyQueuesFlow.update { list ->
             list.map {
                 if (it.queueNumber == queueId && it.doctorId == doctorId) {
-                    it.copy(status = QueueStatus.SELESAI, finishedAt = Date())
+                    finishedItem = it.copy(status = QueueStatus.SELESAI, finishedAt = Date())
+                    finishedItem!!
                 } else {
                     it
                 }
@@ -195,11 +255,34 @@ object DummyQueueRepository : QueueRepository {
         }
         _practiceStatusFlow.update {
             it.toMutableMap().apply {
-                this[doctorId] = currentStatus.copy(totalServed = currentStatus.totalServed + 1)
+                this[doctorId] = currentStatus.copy(
+                    totalServed = currentStatus.totalServed + 1,
+                    currentServingNumber = 0
+                )
             }
         }
+
+        finishedItem?.let {
+            val historyList = DummyHistoryDatabase.history.toMutableList()
+            historyList.add(
+                HistoryItem(
+                    visitId = "hist_${System.currentTimeMillis()}",
+                    userId = it.userId,
+                    doctorName = doctorList[it.doctorId] ?: "Dokter",
+                    visitDate = SimpleDateFormat("d MMMM yyyy", Locale.getDefault()).format(it.createdAt),
+                    initialComplaint = it.keluhan,
+                    status = QueueStatus.SELESAI
+                )
+            )
+            // Anda tidak bisa meng-assign kembali ke val, tapi Anda bisa clear dan addAll jika 'history' adalah MutableList
+            // Asumsi DummyHistoryDatabase.history adalah mutableList
+            (DummyHistoryDatabase.history as MutableList).clear()
+            (DummyHistoryDatabase.history as MutableList).addAll(historyList)
+        }
+
         return Result.success(Unit)
     }
+
 
     override suspend fun setPracticeOpen(doctorId: String, isOpen: Boolean): Result<Unit> {
         val currentStatus = _practiceStatusFlow.value[doctorId] ?: return Result.failure(Exception("Dokter tidak ditemukan"))
@@ -211,19 +294,7 @@ object DummyQueueRepository : QueueRepository {
 
     override suspend fun getVisitHistory(userId: String): List<HistoryItem> {
         delay(300)
-        val dateFormat = java.text.SimpleDateFormat("dd MMMM yyyy", java.util.Locale("id", "ID"))
-
-        return _dailyQueuesFlow.value
-            .filter { it.userId == userId && it.status == QueueStatus.SELESAI }
-            .map { queueItem ->
-                HistoryItem(
-                    visitId = queueItem.queueNumber.toString(),
-                    doctorName = doctorList[queueItem.doctorId] ?: "Dokter",
-                    visitDate = dateFormat.format(queueItem.finishedAt ?: queueItem.createdAt),
-                    initialComplaint = queueItem.keluhan
-                )
-            }
-            .sortedByDescending { it.visitDate }
+        return DummyHistoryDatabase.history.filter { it.userId == userId }
     }
 
     override suspend fun addManualQueue(patientName: String, complaint: String): Result<QueueItem> {
@@ -231,7 +302,6 @@ object DummyQueueRepository : QueueRepository {
         val doctorId = "doc_123"
         val currentStatus = _practiceStatusFlow.value[doctorId] ?: return Result.failure(Exception("Dokter tidak ditemukan"))
 
-        // Cek batasan kuota
         if (currentStatus.lastQueueNumber >= currentStatus.dailyPatientLimit) {
             return Result.failure(Exception("Antrian penuh untuk hari ini."))
         }
@@ -242,7 +312,7 @@ object DummyQueueRepository : QueueRepository {
         val newQueueItem = QueueItem(
             queueNumber = newQueueNumber,
             userId = manualUserId,
-            userName = "$patientName (Manual)", // Tandai sebagai manual
+            userName = "$patientName (Manual)",
             doctorId = doctorId,
             keluhan = complaint.ifBlank { "Tidak ada keluhan awal" }
         )
@@ -263,7 +333,7 @@ object DummyQueueRepository : QueueRepository {
                     currentServingNumber = 0,
                     lastQueueNumber = 0,
                     totalServed = 0,
-                    isPracticeOpen = true
+                    isPracticeOpen = isCurrentlyOpen(doctorId)
                 )
             }
         }
@@ -271,14 +341,20 @@ object DummyQueueRepository : QueueRepository {
 
     override suspend fun getDoctorSchedule(doctorId: String): List<DailyScheduleData> {
         delay(300)
-        return DummyScheduleDatabase.weeklySchedules[doctorId] ?: emptyList()
+        return DummyScheduleDatabase.weeklySchedules[doctorId]?.toList() ?: emptyList()
     }
 
     override suspend fun updateDoctorSchedule(doctorId: String, newSchedule: List<DailyScheduleData>): Result<Unit> {
         delay(500)
         DummyScheduleDatabase.weeklySchedules[doctorId] = newSchedule.toMutableList()
+        _practiceStatusFlow.update {
+            it.toMutableMap().apply {
+                val current = this[doctorId]
+                if (current != null) {
+                    this[doctorId] = current.copy(isPracticeOpen = isCurrentlyOpen(doctorId))
+                }
+            }
+        }
         return Result.success(Unit)
     }
-
-
 }

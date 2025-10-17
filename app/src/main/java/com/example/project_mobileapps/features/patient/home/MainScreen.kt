@@ -47,27 +47,26 @@ fun MainScreen(rootNavController: NavHostController) {
                         rootNavController.navigate("doctorDetail/$doctorId")
                     },
                     onNavigateToQueue = { mainNavController.navigate(BottomNavItem.Queue.route) },
+                    onTakeQueueClick = { mainNavController.navigate(BottomNavItem.Queue.route) },
                     onProfileClick = { mainNavController.navigate(BottomNavItem.Profile.route) },
-                    onTakeQueueClick = { rootNavController.navigate("doctorDetail/$onlyDoctorId") },
-                    onNewsClick = { rootNavController.navigate("news")}
+                    onNewsClick = { rootNavController.navigate("news") }
                 )
             }
 
             composable(BottomNavItem.Queue.route) {
-                val queueViewModel: QueueViewModel = viewModel(
-                    factory = QueueViewModelFactory(
-                        AppContainer.queueRepository,
-                        AuthRepository
-                    )
-                )
+                val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory())
+                val homeUiState by homeViewModel.uiState.collectAsState()
+                val onlyDoctorId = homeUiState.doctor?.id ?: "doc_123"
+
                 QueueScreen(
-                    queueViewModel = queueViewModel,
-                    onBackToHome = { mainNavController.navigate(BottomNavItem.Home.route) }
+                    onBackToHome = { mainNavController.navigate(BottomNavItem.Home.route) },
+                    onNavigateToTakeQueue = { rootNavController.navigate("doctorDetail/$onlyDoctorId") }
                 )
             }
 
             composable(BottomNavItem.Profile.route) {
                 ProfileScreen(
+                    rootNavController = rootNavController,
                     onLogoutClick = {
                         scope.launch {
                             AuthRepository.logout()
@@ -76,7 +75,8 @@ fun MainScreen(rootNavController: NavHostController) {
                             }
                         }
                     },
-                    onNavigateToHistory = { rootNavController.navigate("history") }
+                    onNavigateToHistory = { rootNavController.navigate("history") },
+                    onNavigateToEditProfile = { rootNavController.navigate("editProfile") }
                 )
             }
         }

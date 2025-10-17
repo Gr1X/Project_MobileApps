@@ -2,7 +2,6 @@
 package com.example.project_mobileapps.features.admin.manageSchedule
 
 import android.content.Context
-import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -19,39 +18,35 @@ data class PatientQueueDetails(
     val user: User?
 )
 
-// =======================================================
-// 1. Sederhanakan UI State
-// =======================================================
-data class ManageScheduleUiState(
-    // Hanya ada satu list untuk ditampilkan di UI
-    val patientQueueList: List<PatientQueueDetails> = emptyList(),
-    val selectedPatient: PatientQueueDetails? = null,
+// ✅ 1. Definisikan UI State baru yang lebih kaya data
+data class DoctorQueueUiState(
     val isLoading: Boolean = true,
-    val selectedFilter: QueueStatus? = null, // null berarti "Semua"
+    val currentlyServing: PatientQueueDetails? = null,
+    val patientCalled: PatientQueueDetails? = null,
+    val nextInLine: PatientQueueDetails? = null,
+    val totalWaitingCount: Int = 0,
+    val fullQueueList: List<PatientQueueDetails> = emptyList(),
+    val selectedFilter: QueueStatus? = null,
     val filterOptions: List<QueueStatus> = QueueStatus.values().toList()
 )
 
+// Ganti nama ViewModel agar lebih sesuai, tapi file tetap sama
 class ManageScheduleViewModel(
     private val queueRepository: QueueRepository,
     private val authRepository: AuthRepository
 ) : ViewModel() {
 
-    // =======================================================
-    // 2. Pisahkan State Internal (Bahan Mentah)
-    // =======================================================
     private val _selectedFilter = MutableStateFlow<QueueStatus?>(null)
-    private val _selectedPatient = MutableStateFlow<PatientQueueDetails?>(null)
 
-    // =======================================================
-    // 3. Gabungkan Semua Sumber Data untuk Membuat uiState (Kue Jadi)
-    // =======================================================
-    val uiState: StateFlow<ManageScheduleUiState> = combine(
-        queueRepository.dailyQueuesFlow, // Sumber data 1: Daftar antrian
-        _selectedFilter,                 // Sumber data 2: Filter yang dipilih
-        _selectedPatient                 // Sumber data 3: Pasien yang dipilih
-    ) { queues, selectedFilter, selectedPatient ->
+    // ✅ 2. Ubah total logika 'combine' untuk menyediakan data yang spesifik
+    val uiState: StateFlow<DoctorQueueUiState> = combine(
+        queueRepository.dailyQueuesFlow,
+        _selectedFilter,
+    ) { queues, selectedFilter ->
 
         val allUsers = authRepository.getAllUsers()
+
+        // Buat daftar detail pasien dari semua antrian
         val detailedList = queues.map { queueItem ->
             PatientQueueDetails(
                 queueItem = queueItem,
@@ -59,43 +54,63 @@ class ManageScheduleViewModel(
             )
         }
 
+        // Cari pasien berdasarkan statusnya
+        val serving = detailedList.find { it.queueItem.status == QueueStatus.DILAYANI }
+        val called = detailedList.find { it.queueItem.status == QueueStatus.DIPANGGIL }
+        val next = detailedList.filter { it.queueItem.status == QueueStatus.MENUNGGU }.minByOrNull { it.queueItem.queueNumber }
+        val waitingCount = queues.count { it.status == QueueStatus.MENUNGGU }
+
+        // Filter daftar lengkap untuk bagian bawah
         val filteredList = if (selectedFilter == null) {
             detailedList
         } else {
             detailedList.filter { it.queueItem.status == selectedFilter }
         }
 
-        // Buat UiState final dari semua data yang sudah diolah
-        ManageScheduleUiState(
-            patientQueueList = filteredList,
+        DoctorQueueUiState(
             isLoading = false,
-            selectedFilter = selectedFilter,
-            selectedPatient = selectedPatient
+            currentlyServing = serving,
+            patientCalled = called,
+            nextInLine = next,
+            totalWaitingCount = waitingCount,
+            fullQueueList = filteredList,
+            selectedFilter = selectedFilter
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = ManageScheduleUiState() // State awal saat loading
+        initialValue = DoctorQueueUiState()
     )
 
-    // Blok init sekarang kosong, semua sudah deklaratif
-    init {}
+    // ✅ 3. Tambahkan kembali semua fungsi aksi yang relevan
+    fun callNextPatient(context: Context) {
+        viewModelScope.launch {
+            val result = queueRepository.callNextPatient("doc_123")
+            if (result.isFailure) {
+                Toast.makeText(context, result.exceptionOrNull()?.message, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
-    // =======================================================
-    // 4. Perbarui Fungsi untuk Mengubah State Internal
-    // =======================================================
+    fun confirmPatientArrival(queueNumber: Int, context: Context) {
+        viewModelScope.launch {
+            queueRepository.confirmPatientArrival(queueNumber, "doc_123")
+            Toast.makeText(context, "Pasien No. $queueNumber hadir.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun finishConsultation(queueNumber: Int, context: Context) {
+        viewModelScope.launch {
+            queueRepository.finishConsultation(queueNumber, "doc_123")
+            Toast.makeText(context, "Konsultasi No. $queueNumber selesai.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun filterByStatus(status: QueueStatus?) {
         _selectedFilter.value = status
     }
 
-    fun selectPatient(patient: PatientQueueDetails) {
-        _selectedPatient.value = patient
-    }
-
-    fun clearSelectedPatient() {
-        _selectedPatient.value = null
-    }
-
+    // Fungsi untuk membatalkan antrian (bisa digunakan dokter jika perlu)
     fun cancelPatientQueue(patientDetails: PatientQueueDetails, context: Context) {
         viewModelScope.launch {
             val result = queueRepository.cancelQueue(

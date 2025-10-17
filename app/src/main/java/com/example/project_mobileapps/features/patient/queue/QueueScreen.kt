@@ -1,252 +1,261 @@
 package com.example.project_mobileapps.features.patient.queue
 
-import androidx.compose.foundation.Image
-import com.example.project_mobileapps.ui.components.CircularBackButton
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.ConfirmationNumber
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.example.project_mobileapps.R
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.project_mobileapps.data.repo.AuthRepository
+import com.example.project_mobileapps.di.AppContainer
+import com.example.project_mobileapps.ui.components.CircularBackButton
+import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
+import com.example.project_mobileapps.ui.components.QueueChip
+import com.example.project_mobileapps.ui.themes.TextSecondary
+import kotlinx.coroutines.delay
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QueueScreen(
-    queueViewModel: QueueViewModel,
-    onBackToHome: () -> Unit
+    queueViewModel: QueueViewModel = viewModel(factory = QueueViewModelFactory(AppContainer.queueRepository, AuthRepository)),
+    onBackToHome: () -> Unit,
+    onNavigateToTakeQueue: () -> Unit
 ) {
     val uiState by queueViewModel.uiState.collectAsState()
+    var showCancelSheet by remember { mutableStateOf(false) }
+
+    // ✅ 1. State variable to hold the real-time timer value
+    var displayedWaitTime by remember { mutableStateOf(uiState.estimatedWaitTime) }
+
+    // ✅ 2. Effect to run the timer
+    LaunchedEffect(key1 = uiState.estimatedWaitTime) {
+        displayedWaitTime = uiState.estimatedWaitTime
+        if (displayedWaitTime > 0) {
+            while (displayedWaitTime > 0) {
+                delay(60_000L) // Wait for 1 minute
+                displayedWaitTime--
+            }
+        }
+    }
+
+    if (showCancelSheet) {
+        ConfirmationBottomSheet(
+            onDismiss = { showCancelSheet = false },
+            onConfirm = {
+                queueViewModel.cancelMyQueue()
+                showCancelSheet = false
+            },
+            title = "Konfirmasi Pembatalan",
+            text = "Apakah Anda yakin ingin membatalkan antrian ini? Tindakan ini tidak dapat diurungkan."
+        )
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Queue Menu") },
-                navigationIcon = {
-                    CircularBackButton(onClick = {})
-                }
+                title = { Text("Status Antrian") },
+                navigationIcon = { CircularBackButton(onClick = onBackToHome) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
-        }
-
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        if (uiState.myQueueItem != null && uiState.practiceStatus != null) {
-            QueueContent(
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            QueueInfoCard(
                 uiState = uiState,
-                onCancelQueue = { queueViewModel.cancelMyQueue() },
-                modifier = Modifier.padding(padding)
+                onTakeQueue = onNavigateToTakeQueue,
+                onCancelQueue = { showCancelSheet = true }
             )
-
-        } else {
-            EmptyQueueContent(
-                onTakeQueue = onBackToHome,
-                modifier = Modifier.padding(padding)
-            )
+            StatCard(uiState = uiState, displayedWaitTime = displayedWaitTime)
+            QueueChipList(uiState = uiState)
         }
     }
 }
 
 @Composable
-fun QueueContent(
+private fun QueueInfoCard(
     uiState: QueueUiState,
-    onCancelQueue: () -> Unit,
-    modifier: Modifier = Modifier
+    onTakeQueue: () -> Unit,
+    onCancelQueue: () -> Unit
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 16.dp)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        ProfileHeader()
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Card(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
             ) {
-                Text("Nomor Antrian Anda", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    text = "${uiState.myQueueItem?.queueNumber ?: '?'}",
-                    fontSize = 80.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .width(IntrinsicSize.Max),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (uiState.practiceStatus?.isPracticeOpen == true) Color(0xFF4CAF50).copy(alpha = 0.2f) else Color.Red.copy(alpha = 0.2f),
+                    ) {
+                        val statusText = if (uiState.practiceStatus?.isPracticeOpen == true) "Buka" else "Tutup"
+                        Text(
+                            text = statusText,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color(0xFFFFC107).copy(alpha = 0.2f),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            // --- PERBAIKAN DI SINI ---
+                            Text(
+                                text = uiState.todaySchedule?.startTime ?: "--:--",
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "-",
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.height(10.dp)
+                            )
+                            Text(
+                                text = uiState.todaySchedule?.endTime ?: "--:--",
+                                fontWeight = FontWeight.Bold
+                            )
+                            // -------------------------
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = if (uiState.myQueueItem != null) "Nomor Antrian Anda" else "Total Antrian Hari Ini",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = TextSecondary,
+                    )
+                    Text(
+                        text = if (uiState.myQueueItem != null) "${uiState.myQueueItem?.queueNumber}" else "${uiState.activeQueueCount}",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Sisa ${uiState.availableSlots} slot",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = TextSecondary
+                    )
+                }
+            }
+
+            if (uiState.myQueueItem != null) {
+                OutlinedButton(
+                    onClick = onCancelQueue,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                ) {
+                    Text("Batalkan")
+                }
+            } else {
+                Button(
+                    onClick = onTakeQueue,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    enabled = uiState.practiceStatus?.isPracticeOpen == true && uiState.availableSlots > 0
+                ) {
+                    Text("Ambil Nomor Antrian")
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun StatCard(
+    uiState: QueueUiState,
+    displayedWaitTime: Int
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp, horizontal = 12.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val totalWaiting = uiState.queuesAhead
+            StatItem(value = "$totalWaiting Orang", label = "Di Depan Anda")
+            StatItem(value = "$displayedWaitTime Menit", label = "Estimasi")
+        }
+    }
+}
+
+@Composable
+private fun QueueChipList(uiState: QueueUiState) {
+    if (uiState.upcomingQueues.isEmpty()) {
+        Text(
+            "Belum ada antrian untuk hari ini.",
+            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+            textAlign = TextAlign.Center,
+            color = TextSecondary
+        )
+    } else {
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp)
+        ) {
+            itemsIndexed(uiState.upcomingQueues) { index, queueItem ->
+                QueueChip(
+                    queueItem = queueItem,
+                    isFirstInLine = (index == 0)
                 )
             }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 3. Menampilkan info detail antrian
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            InfoChip(
-                label = "Sedang Dilayani",
-                value = "${uiState.practiceStatus?.currentServingNumber ?: '?'}",
-                modifier = Modifier.weight(1f)
-            )
-            InfoChip(
-                label = "Antrian di Depan",
-                value = "${uiState.queuesAhead} orang",
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        InfoChip(
-            label = "Estimasi Waktu Tunggu",
-            value = "${uiState.estimatedWaitTime} Menit",
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-        )
-
-        Spacer(modifier = Modifier.weight(1f)) // Spacer untuk mendorong tombol ke bawah
-
-        // 4. Tombol Aksi di bagian bawah
-        OutlinedButton(
-            onClick = onCancelQueue,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            border = ButtonDefaults.outlinedButtonBorder.copy(brush = SolidColor(MaterialTheme.colorScheme.error))
-        ) {
-            Text("Batalkan Antrian")
-        }
-    }
-}
-
-
-@Composable
-fun ProfileHeader() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(240.dp)
-    ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-                .align(Alignment.BottomCenter),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-        ) {
-            Row(modifier = Modifier.padding(start = 16.dp, top = 24.dp)) {
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = Color(0xFFFFC107).copy(alpha = 0.2f),
-                        ) {
-                            Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                                Icon(Icons.Default.Star, contentDescription = "Rating", tint = Color(0xFFFFC107), modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("4.5", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = Color(0xFF4CAF50).copy(alpha = 0.2f),
-                        ) {
-                            Text("$90/hr", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Dr. Adam Max", style = MaterialTheme. typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Text("Psychologist", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { /*TODO*/ },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                        contentPadding = PaddingValues(horizontal = 24.dp)
-                    ) {
-                        Text("Message", color = MaterialTheme.colorScheme.primary)
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.LightGray.copy(alpha = 0.2f))
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 24.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            StatItem("12 years", "Experience")
-                            StatItem("3700+", "Patients")
-                            StatItem("52", "Operations")
-                        }
-                    }
-                }
-            }
-        }
-
-        Image(
-            painter = painterResource(id = R.drawable.doctor_budi),
-            contentDescription = "Dr. Adam Max",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 16.dp)
-                .size(170.dp)
-        )
-    }
-}
-
-@Composable
-fun InfoChip(label: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier = modifier) {
-        Column(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(label, style = MaterialTheme.typography.labelMedium)
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -254,52 +263,8 @@ fun InfoChip(label: String, value: String, modifier: Modifier = Modifier) {
 @Composable
 fun StatItem(value: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
     }
 }
-
-@Composable
-fun EmptyQueueContent(
-    onTakeQueue: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.ConfirmationNumber,
-            contentDescription = "Tidak ada antrian",
-            modifier = Modifier.size(80.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            "Anda Belum Memiliki Antrian",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "Silakan ambil nomor antrian terlebih dahulu melalui halaman utama.",
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(32.dp))
-        Button(
-            onClick = onTakeQueue,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Kembali ke Beranda")
-        }
-    }
-}
-

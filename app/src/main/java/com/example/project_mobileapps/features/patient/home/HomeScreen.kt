@@ -187,26 +187,11 @@ fun HomeScreen(
                 actions = actionItems,
                 onActionClick = { label ->
                     when (label) {
-                        "Berita" -> onNewsClick()
+                        "Berita Kesehatan" -> onNewsClick()
                         else -> Toast.makeText(context, "$label diklik!", Toast.LENGTH_SHORT).show()
                     }
                 }
             )
-
-            Spacer(Modifier.height(24.dp))
-
-            if (uiState.activeQueue != null) {
-                QueueStatusCard(
-                    queue = uiState.activeQueue,
-                    onClick = onNavigateToQueue
-                )
-            }
-//            else {
-//                CurrentQueueCard(
-//                    servingPatient = uiState.currentlyServingPatient,
-//                    onTakeQueueClick = onTakeQueueClick
-//                )
-//            }
 
             Spacer(Modifier.height(8.dp))
 
@@ -220,9 +205,6 @@ fun HomeScreen(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
-                TextButton(onClick = { /* Aksi "See detail" */ }) {
-                    Text("See detail")
-                }
             }
 
             Spacer(Modifier.height(8.dp))
@@ -237,31 +219,6 @@ fun HomeScreen(
                 )
             }
         }
-    }
-}
-
-@Composable
-fun MedicalIcon(
-    label: String,
-    @DrawableRes iconRes: Int,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = modifier.clickable(onClick = onClick).padding(8.dp)
-    ) {
-        Icon(
-            painter = painterResource(id = iconRes),
-            contentDescription = label,
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(text = label, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -295,104 +252,6 @@ fun QueueStatusCard(queue: QueueItem, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
             )
-        }
-    }
-}
-
-@Composable
-fun CurrentQueueCard(servingPatient: QueueItem?, onTakeQueueClick: () -> Unit) {
-    var consultationTime by remember { mutableStateOf("00:00") }
-
-    LaunchedEffect(servingPatient) {
-        if (servingPatient?.status == QueueStatus.DILAYANI && servingPatient.startedAt != null) {
-            while (true) {
-                val diff = Date().time - servingPatient.startedAt!!.time
-                val minutes = TimeUnit.MILLISECONDS.toMinutes(diff)
-                val seconds = TimeUnit.MILLISECONDS.toSeconds(diff) % 60
-                consultationTime = String.format("%02d:%02d", minutes, seconds)
-                delay(1000L)
-            }
-        } else {
-            consultationTime = "00:00"
-        }
-    }
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Saat Ini Dilayani",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                if (servingPatient != null) {
-                    Text(
-                        "${servingPatient.queueNumber}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "Waktu Berjalan: $consultationTime",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    Text(
-                        "Tidak ada antrian",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            Button(
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.onBackground
-                ),
-                onClick = onTakeQueueClick
-            ) {
-                Text("Ambil Antrian")
-            }
-        }
-    }
-}
-
-@Composable
-fun PublicQueueInfoCard(status: PracticeStatus?, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column {
-                Text(
-                    "Antrian",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Text(
-                    "${status?.currentServingNumber ?: 0}",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Button(onClick = onClick) {
-                Text("Lihat Antrian")
-            }
         }
     }
 }
