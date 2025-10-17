@@ -1,4 +1,3 @@
-// File: features/admin/manageSchedule/ManageScheduleViewModel.kt
 package com.example.project_mobileapps.features.admin.manageSchedule
 
 import android.content.Context
@@ -6,6 +5,7 @@ import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.model.User
 import com.example.project_mobileapps.data.repo.AuthRepository
@@ -18,7 +18,6 @@ data class PatientQueueDetails(
     val user: User?
 )
 
-// ✅ 1. Definisikan UI State baru yang lebih kaya data
 data class DoctorQueueUiState(
     val isLoading: Boolean = true,
     val currentlyServing: PatientQueueDetails? = null,
@@ -27,26 +26,23 @@ data class DoctorQueueUiState(
     val totalWaitingCount: Int = 0,
     val fullQueueList: List<PatientQueueDetails> = emptyList(),
     val selectedFilter: QueueStatus? = null,
-    val filterOptions: List<QueueStatus> = QueueStatus.values().toList()
+    val filterOptions: List<QueueStatus> = QueueStatus.values().toList(),
+    val practiceStatus: PracticeStatus? = null
 )
 
-// Ganti nama ViewModel agar lebih sesuai, tapi file tetap sama
-class ManageScheduleViewModel(
+class AdminQueueMonitorViewModel(
     private val queueRepository: QueueRepository,
     private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _selectedFilter = MutableStateFlow<QueueStatus?>(null)
 
-    // ✅ 2. Ubah total logika 'combine' untuk menyediakan data yang spesifik
     val uiState: StateFlow<DoctorQueueUiState> = combine(
         queueRepository.dailyQueuesFlow,
-        _selectedFilter,
-    ) { queues, selectedFilter ->
-
+        queueRepository.practiceStatusFlow,
+        _selectedFilter
+    ) { queues, statuses, selectedFilter ->
         val allUsers = authRepository.getAllUsers()
-
-        // Buat daftar detail pasien dari semua antrian
         val detailedList = queues.map { queueItem ->
             PatientQueueDetails(
                 queueItem = queueItem,
@@ -54,18 +50,11 @@ class ManageScheduleViewModel(
             )
         }
 
-        // Cari pasien berdasarkan statusnya
         val serving = detailedList.find { it.queueItem.status == QueueStatus.DILAYANI }
         val called = detailedList.find { it.queueItem.status == QueueStatus.DIPANGGIL }
         val next = detailedList.filter { it.queueItem.status == QueueStatus.MENUNGGU }.minByOrNull { it.queueItem.queueNumber }
         val waitingCount = queues.count { it.status == QueueStatus.MENUNGGU }
-
-        // Filter daftar lengkap untuk bagian bawah
-        val filteredList = if (selectedFilter == null) {
-            detailedList
-        } else {
-            detailedList.filter { it.queueItem.status == selectedFilter }
-        }
+        val filteredList = if (selectedFilter == null) detailedList else detailedList.filter { it.queueItem.status == selectedFilter }
 
         DoctorQueueUiState(
             isLoading = false,
@@ -74,7 +63,8 @@ class ManageScheduleViewModel(
             nextInLine = next,
             totalWaitingCount = waitingCount,
             fullQueueList = filteredList,
-            selectedFilter = selectedFilter
+            selectedFilter = selectedFilter,
+            practiceStatus = statuses["doc_123"]
         )
     }.stateIn(
         scope = viewModelScope,
@@ -82,7 +72,6 @@ class ManageScheduleViewModel(
         initialValue = DoctorQueueUiState()
     )
 
-    // ✅ 3. Tambahkan kembali semua fungsi aksi yang relevan
     fun callNextPatient(context: Context) {
         viewModelScope.launch {
             val result = queueRepository.callNextPatient("doc_123")
@@ -110,7 +99,6 @@ class ManageScheduleViewModel(
         _selectedFilter.value = status
     }
 
-    // Fungsi untuk membatalkan antrian (bisa digunakan dokter jika perlu)
     fun cancelPatientQueue(patientDetails: PatientQueueDetails, context: Context) {
         viewModelScope.launch {
             val result = queueRepository.cancelQueue(
@@ -126,15 +114,14 @@ class ManageScheduleViewModel(
     }
 }
 
-
-class ManageScheduleViewModelFactory(
+class AdminQueueMonitorViewModelFactory(
     private val queueRepository: QueueRepository,
     private val authRepository: AuthRepository
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(ManageScheduleViewModel::class.java)) {
+        if (modelClass.isAssignableFrom(AdminQueueMonitorViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return ManageScheduleViewModel(queueRepository, authRepository) as T
+            return AdminQueueMonitorViewModel(queueRepository, authRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

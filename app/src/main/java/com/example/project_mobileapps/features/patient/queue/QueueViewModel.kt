@@ -80,13 +80,12 @@ class QueueViewModel(
                         availableSlots = slotsLeft.coerceAtLeast(0),
                         upcomingQueues = upcoming,
                         activeQueueCount = activeQueueCount,
-                        todaySchedule = todaySchedule // <-- KIRIM JADWAL HARI INI KE UI
+                        todaySchedule = todaySchedule
                     )
                 }
             }
         }
     }
-    // --------------------------------------------------------------------
 
     fun cancelMyQueue() {
         viewModelScope.launch {

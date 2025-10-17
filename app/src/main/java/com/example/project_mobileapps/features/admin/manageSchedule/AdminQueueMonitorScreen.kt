@@ -1,9 +1,7 @@
-// File: features/admin/manageSchedule/ManageScheduleScreen.kt
+// File: features/admin/manageSchedule/AdminQueueMonitorScreen.kt
 package com.example.project_mobileapps.features.admin.manageSchedule
 
-import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,8 +10,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.ConfirmationNumber
 import androidx.compose.material.icons.outlined.Groups
@@ -30,14 +30,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.project_mobileapps.R
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.model.Role
 import com.example.project_mobileapps.features.doctor.DetailRow
-import com.example.project_mobileapps.features.doctor.PatientDetailBottomSheet
 import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
 import com.example.project_mobileapps.ui.components.ConfirmationDialog
 import kotlinx.coroutines.delay
@@ -53,8 +50,8 @@ sealed class ConfirmationAction {
 }
 
 @Composable
-fun ManageScheduleScreen(
-    viewModel: ManageScheduleViewModel,
+fun AdminQueueMonitorScreen(
+    viewModel: AdminQueueMonitorViewModel, // <-- Tipe ViewModel diubah
     currentUserRole: Role?
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -508,6 +505,35 @@ fun PatientDetailBottomSheet(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Batalkan Antrian")
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServiceTimeSelector(
+    currentTime: Int,
+    onTimeChange: (Int) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column {
+            Text("Estimasi Waktu Layanan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Per Pasien", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            IconButton(onClick = { onTimeChange(-1) }, enabled = currentTime > 5) {
+                Icon(Icons.Default.Remove, "Kurangi")
+            }
+            Text("$currentTime min", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            IconButton(onClick = { onTimeChange(1) }, enabled = currentTime < 60) {
+                Icon(Icons.Default.Add, "Tambah")
             }
         }
     }

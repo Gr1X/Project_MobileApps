@@ -84,17 +84,6 @@ fun DoctorDashboardScreen(
 
 @Composable
 fun DoctorDashboardHeader(uiState: DoctorUiState) {
-    // Ambil jadwal untuk hari ini dari status praktik
-    val todaySchedule = uiState.practiceStatus?.let { status ->
-        val calendar = Calendar.getInstance()
-        val dayOfWeekInt = calendar.get(Calendar.DAY_OF_WEEK)
-        val dayMapping = listOf("Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu")
-        val currentDayString = dayMapping[dayOfWeekInt - 1]
-        // Cari jadwal hari ini (asumsi data jadwal ada di tempat lain, ini hanya untuk UI)
-        // Untuk implementasi nyata, data ini harusnya datang dari ViewModel
-        DailyScheduleData(currentDayString, status.isPracticeOpen, "${status.openingHour}:00", "${status.closingHour}:00")
-    }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -111,8 +100,8 @@ fun DoctorDashboardHeader(uiState: DoctorUiState) {
         )
         Spacer(Modifier.height(24.dp))
 
-        PracticeStatusCard(schedule = todaySchedule)
-        // ---------------------------------
+        // PANGGIL COMPOSABLE BARU DI SINI
+        PracticeStatusCard(schedule = uiState.todaySchedule)
 
         Spacer(Modifier.height(24.dp))
 
@@ -120,30 +109,6 @@ fun DoctorDashboardHeader(uiState: DoctorUiState) {
             nextQueue = uiState.nextQueueNumber,
             waiting = uiState.waitingInQueue
         )
-    }
-}
-
-// --- TAMBAHKAN COMPOSABLE BARU INI DI BAWAH DoctorDashboardHeader ---
-@Composable
-fun PracticeStatusCard(schedule: DailyScheduleData?) {
-    val statusText = if (schedule?.isOpen == true) "BUKA" else "TUTUP"
-    val statusColor = if (schedule?.isOpen == true) Color(0xFF00C853) else MaterialTheme.colorScheme.error
-    val jamPraktik = if (schedule?.isOpen == true) "${schedule.startTime} - ${schedule.endTime}" else "Tidak ada jadwal hari ini"
-    val currentDate = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale("id", "ID")).format(Date())
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f))
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(currentDate, style = MaterialTheme.typography.labelMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Status: ", style = MaterialTheme.typography.titleMedium)
-                Text(statusText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = statusColor)
-            }
-            Text("Jam Praktik: $jamPraktik", style = MaterialTheme.typography.bodyMedium)
-        }
     }
 }
 
@@ -197,10 +162,7 @@ fun StatCard(
         }
     }
 }
-// ==============================================================================
 
-
-// ... (SimplePatientInfoCard dan StatusChip tidak berubah) ...
 @Composable
 fun SimplePatientInfoCard(
     patientDetails: PatientQueueDetails,
@@ -312,5 +274,30 @@ fun DetailRow(label: String, value: String) {
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+fun PracticeStatusCard(schedule: DailyScheduleData?) {
+    val isPracticeOpen = schedule?.isOpen ?: false
+    val statusText = if (isPracticeOpen) "BUKA" else "TUTUP"
+    val statusColor = if (isPracticeOpen) Color(0xFF00C853) else MaterialTheme.colorScheme.error
+    val jamPraktik = if (schedule != null && schedule.isOpen) "${schedule.startTime} - ${schedule.endTime}" else "Tidak ada jadwal hari ini"
+    val currentDate = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale("id", "ID")).format(Date())
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(currentDate, style = MaterialTheme.typography.labelMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Status: ", style = MaterialTheme.typography.titleMedium)
+                Text(statusText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = statusColor)
+            }
+            Text("Jam Praktik: $jamPraktik", style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }

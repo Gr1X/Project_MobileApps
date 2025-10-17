@@ -1,7 +1,5 @@
-package com.example.project_mobileapps.features.admin
+package com.example.project_mobileapps.features.admin.dashboard
 
-import android.content.Context
-import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -14,12 +12,10 @@ import com.example.project_mobileapps.data.repo.QueueRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
+import java.util.*
 import java.util.concurrent.TimeUnit
 
 data class AdminDashboardUiState(
-    val queueList: List<QueueItem> = emptyList(),
     val practiceStatus: PracticeStatus? = null,
     val isLoading: Boolean = true,
     val totalPatientsToday: Int = 0,
@@ -42,13 +38,17 @@ class AdminDashboardViewModel(private val queueRepository: QueueRepository) : Vi
 
     private fun fetchData() {
         viewModelScope.launch {
-
             combine(
                 queueRepository.dailyQueuesFlow,
-                queueRepository.practiceStatusFlow,
-                flow { emit(queueRepository.getWeeklyReport()) },
-                flow { emit(queueRepository.getDoctorSchedule("doc_123")) }
-            ) { queues, statuses, report, schedule ->
+                queueRepository.practiceStatusFlow
+            ) { queues, statuses ->
+                // Buat data sementara di dalam combine
+                Pair(queues, statuses)
+            }.collect { (queues, statuses) ->
+                // Lakukan suspend call di dalam collect
+                val report = queueRepository.getWeeklyReport()
+                val schedule = queueRepository.getDoctorSchedule("doc_123")
+
                 val finishedQueuesToday = queues.filter { it.status == QueueStatus.SELESAI }
                 val avgServiceTime = if (finishedQueuesToday.isNotEmpty()) {
                     finishedQueuesToday
@@ -78,12 +78,12 @@ class AdminDashboardViewModel(private val queueRepository: QueueRepository) : Vi
                         patientsWaiting = waiting,
                         patientsFinished = finished,
                         weeklyReport = report,
-                        top5ActiveQueue = activeQueues.take(5), // Ambil 5 teratas
+                        top5ActiveQueue = activeQueues.take(5),
                         doctorScheduleToday = todaySchedule,
                         avgServiceTimeMinutes = avgServiceTime
                     )
                 }
-            }.collect()
+            }
         }
     }
 }

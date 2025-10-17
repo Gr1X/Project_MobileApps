@@ -24,7 +24,6 @@ object DummyQueueRepository : QueueRepository {
     private val doctorList = mapOf("doc_123" to "Dr. Budi Santoso")
     private val FIFTEEN_MINUTES_IN_MS = 15 * 60 * 1000 // Koreksi: 15 menit
 
-    // --- PINDAHKAN FUNGSI INI KE ATAS ---
     private fun isCurrentlyOpen(doctorId: String): Boolean {
         val schedules = DummyScheduleDatabase.weeklySchedules[doctorId] ?: return false
         val calendar = Calendar.getInstance()
@@ -49,7 +48,6 @@ object DummyQueueRepository : QueueRepository {
             return false
         }
     }
-    // ------------------------------------
 
     private val _practiceStatusFlow = MutableStateFlow(
         mapOf("doc_123" to PracticeStatus(
@@ -57,11 +55,9 @@ object DummyQueueRepository : QueueRepository {
             doctorName = "Dr. Budi Santoso",
             currentServingNumber = 4,
             lastQueueNumber = 8,
-            isPracticeOpen = isCurrentlyOpen("doc_123"), // Sekarang panggilan ini valid
-            totalServed = 3
-            // Anda belum menambahkan properti lain di sini, ini akan menyebabkan error
-            // Tambahkan properti yang hilang sesuai definisi PracticeStatus
-            , dailyPatientLimit = 50,
+            isPracticeOpen = isCurrentlyOpen("doc_123"),
+            totalServed = 3,
+            dailyPatientLimit = 50,
             estimatedServiceTimeInMinutes = 30,
             openingHour = 9,
             closingHour = 17
@@ -98,10 +94,10 @@ object DummyQueueRepository : QueueRepository {
         val now = Date().time
         _dailyQueuesFlow.update { currentList ->
             val (latePatients, onTimePatients) = currentList.partition { item ->
-                item.status == QueueStatus.DIPANGGIL &&
-                        item.calledAt != null &&
-                        (now - item.calledAt!!.time > FIFTEEN_MINUTES_IN_MS) &&
-                        !item.hasBeenLate
+                item.status == QueueStatus.DIPANGGIL && !item.hasBeenLate &&
+                        item.calledAt?.let { calledTime ->
+                            (now - calledTime.time > FIFTEEN_MINUTES_IN_MS)
+                        } ?: false
             }
 
             if (latePatients.isNotEmpty()) {
@@ -169,6 +165,19 @@ object DummyQueueRepository : QueueRepository {
             it.toMutableMap().apply { this[doctorId] = currentStatus.copy(lastQueueNumber = newQueueNumber) }
         }
         return Result.success(newQueueItem)
+    }
+
+    override suspend fun updateEstimatedServiceTime(doctorId: String, minutes: Int): Result<Unit> {
+        delay(100) // Simulasi simpan cepat
+        _practiceStatusFlow.update { statusMap ->
+            statusMap.toMutableMap().apply {
+                val currentStatus = this[doctorId]
+                if (currentStatus != null) {
+                    this[doctorId] = currentStatus.copy(estimatedServiceTimeInMinutes = minutes)
+                }
+            }
+        }
+        return Result.success(Unit)
     }
 
     override suspend fun cancelQueue(userId: String, doctorId: String): Result<Unit> {
@@ -243,6 +252,7 @@ object DummyQueueRepository : QueueRepository {
         val currentStatus = _practiceStatusFlow.value[doctorId] ?: return Result.failure(Exception("Dokter tidak ditemukan"))
         var finishedItem: QueueItem? = null
 
+        // Update status antrian menjadi SELESAI
         _dailyQueuesFlow.update { list ->
             list.map {
                 if (it.queueNumber == queueId && it.doctorId == doctorId) {
@@ -253,32 +263,32 @@ object DummyQueueRepository : QueueRepository {
                 }
             }
         }
+
+        // Update status praktik dokter
         _practiceStatusFlow.update {
             it.toMutableMap().apply {
                 this[doctorId] = currentStatus.copy(
                     totalServed = currentStatus.totalServed + 1,
-                    currentServingNumber = 0
+                    currentServingNumber = 0 // Reset nomor yang sedang dilayani
                 )
             }
         }
 
+        // --- PERBAIKAN UTAMA DI SINI ---
+        // Logika untuk menambahkan ke riwayat disederhanakan
         finishedItem?.let {
-            val historyList = DummyHistoryDatabase.history.toMutableList()
-            historyList.add(
-                HistoryItem(
-                    visitId = "hist_${System.currentTimeMillis()}",
-                    userId = it.userId,
-                    doctorName = doctorList[it.doctorId] ?: "Dokter",
-                    visitDate = SimpleDateFormat("d MMMM yyyy", Locale.getDefault()).format(it.createdAt),
-                    initialComplaint = it.keluhan,
-                    status = QueueStatus.SELESAI
-                )
+            val newHistoryItem = HistoryItem(
+                visitId = "hist_${System.currentTimeMillis()}",
+                userId = it.userId,
+                doctorName = doctorList[it.doctorId] ?: "Dokter",
+                visitDate = SimpleDateFormat("d MMMM yyyy", Locale("id", "ID")).format(it.createdAt),
+                initialComplaint = it.keluhan,
+                status = QueueStatus.SELESAI
             )
-            // Anda tidak bisa meng-assign kembali ke val, tapi Anda bisa clear dan addAll jika 'history' adalah MutableList
-            // Asumsi DummyHistoryDatabase.history adalah mutableList
-            (DummyHistoryDatabase.history as MutableList).clear()
-            (DummyHistoryDatabase.history as MutableList).addAll(historyList)
+            // Cukup tambahkan item baru ke daftar yang sudah mutable
+            DummyHistoryDatabase.history.add(0, newHistoryItem) // add(0, ...) agar muncul di paling atas
         }
+        // --- AKHIR PERBAIKAN ---
 
         return Result.success(Unit)
     }

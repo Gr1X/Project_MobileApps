@@ -1,4 +1,3 @@
-// File BARU: features/admin/manageSchedule/ManagePracticeScheduleViewModel.kt
 package com.example.project_mobileapps.features.admin.manageSchedule
 
 import android.content.Context
@@ -8,16 +7,14 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.project_mobileapps.data.local.DailyScheduleData
 import com.example.project_mobileapps.data.repo.QueueRepository
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 data class PracticeScheduleUiState(
     val schedules: List<DailyScheduleData> = emptyList(),
     val isLoading: Boolean = true,
-    val isSaving: Boolean = false
+    val isSaving: Boolean = false,
+    val estimatedServiceTime: Int = 15
 )
 
 class ManagePracticeScheduleViewModel(private val queueRepository: QueueRepository) : ViewModel() {
@@ -33,7 +30,14 @@ class ManagePracticeScheduleViewModel(private val queueRepository: QueueReposito
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             val schedules = queueRepository.getDoctorSchedule("doc_123")
-            _uiState.update { it.copy(isLoading = false, schedules = schedules) }
+            val practiceStatus = queueRepository.practiceStatusFlow.first()["doc_123"]
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    schedules = schedules,
+                    estimatedServiceTime = practiceStatus?.estimatedServiceTimeInMinutes ?: 15
+                )
+            }
         }
     }
 
@@ -57,6 +61,14 @@ class ManagePracticeScheduleViewModel(private val queueRepository: QueueReposito
                 }
             }
             currentState.copy(schedules = updatedSchedules)
+        }
+    }
+
+    fun onServiceTimeChange(change: Int) {
+        viewModelScope.launch {
+            val newTime = (_uiState.value.estimatedServiceTime + change).coerceIn(5, 60)
+            _uiState.update { it.copy(estimatedServiceTime = newTime) }
+            queueRepository.updateEstimatedServiceTime("doc_123", newTime)
         }
     }
 

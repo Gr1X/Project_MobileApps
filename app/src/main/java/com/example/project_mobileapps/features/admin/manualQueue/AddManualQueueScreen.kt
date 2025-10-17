@@ -276,7 +276,6 @@ private fun NewPatientForm(uiState: AddManualQueueUiState, viewModel: AddManualQ
                 }
             }
         }
-        // ------------------------------------
     }
 }
 

@@ -1,70 +1,88 @@
 package com.example.project_mobileapps.features.getstarted
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.project_mobileapps.R
-import com.example.project_mobileapps.ui.themes.PoppinsFamily
-import com.example.project_mobileapps.ui.themes.TextSecondary
 
 @Composable
 fun GetStartedScreen(
     onGetStartedClick: () -> Unit,
     onLoginClick: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Gambar sebagai Background
+        Image(
+            painter = painterResource(id = R.drawable.bg_get_started),
+            contentDescription = "Background Medis",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
+        // Lapisan Gradient Gelap Transparan
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f), Color.Black),
+                        startY = 600f
+                    )
+                )
+        )
+
+        // Konten Teks dan Tombol di Bagian Bawah
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .padding(32.dp),
+
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.Bottom
         ) {
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            Image(
-                painter = painterResource(id = R.drawable.bg_get_started),
-                contentDescription = "Ilustrasi Dokter",
-                modifier = Modifier.size(250.dp)
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
             // Judul Utama
             Text(
-                text = "Solusi Kesehatan dalam Genggaman Anda",
+                text = "KliniQ",
                 style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
                 textAlign = TextAlign.Start
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Deskripsi
             Text(
                 text = "Atur janji temu dan pantau antrian praktik dokter dengan mudah dan cepat.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary,
-                textAlign = TextAlign.Center
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.White.copy(alpha = 0.8f),
+                // --- PERBAIKAN 4: Perataan teks menjadi Start (Rata Kiri) ---
+                textAlign = TextAlign.Start
             )
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(48.dp))
 
+            // Tombol Utama (tidak berubah)
             Button(
                 onClick = onGetStartedClick,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp)
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White
+                )
             ) {
                 Text(
                     text = "Mulai Sekarang",
@@ -72,13 +90,17 @@ fun GetStartedScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            TextButton(onClick = onLoginClick) {
+            // Tombol Sekunder (dibuat fillMaxWidth agar rata tengah)
+            TextButton(
+                onClick = onLoginClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text(
                     text = "Saya Sudah Punya Akun",
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
+                    color = Color.White
                 )
             }
         }

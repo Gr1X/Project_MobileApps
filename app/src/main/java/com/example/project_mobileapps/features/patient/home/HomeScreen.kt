@@ -65,6 +65,22 @@ fun HomeScreen(
     val hasUnreadNotifications = notifications.any { !it.isRead }
     val haptic = LocalHapticFeedback.current
 
+    // --- 1. TAMBAHKAN STATE UNTUK DIALOG ---
+    var showMealPlanDialog by remember { mutableStateOf(false) }
+
+    // --- 2. BUAT DIALOG-NYA ---
+    if (showMealPlanDialog) {
+        AlertDialog(
+            onDismissRequest = { showMealPlanDialog = false },
+            title = { Text("Fitur Segera Hadir!") },
+            text = { Text("Fitur ini nantinya akan memberikan rekomendasi rencana makan (meal plan) yang dipersonalisasi menggunakan machine learning untuk memprediksi kebutuhan nutrisi Anda.") },
+            confirmButton = {
+                TextButton(onClick = { showMealPlanDialog = false }) {
+                    Text("Mengerti")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -185,9 +201,11 @@ fun HomeScreen(
 
             ActionButtonsRow(
                 actions = actionItems,
+                // --- 3. UBAH AKSI TOMBOL DI SINI ---
                 onActionClick = { label ->
                     when (label) {
                         "Berita Kesehatan" -> onNewsClick()
+                        "Lacak Makanan" -> showMealPlanDialog = true // Panggil dialog
                         else -> Toast.makeText(context, "$label diklik!", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -263,7 +281,7 @@ private fun ActionButtonsRow(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceAround // Beri jarak yang sama antar tombol
+        horizontalArrangement = Arrangement.SpaceAround
     ) {
         actions.forEach { action ->
             ActionButton(
