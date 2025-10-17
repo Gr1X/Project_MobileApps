@@ -24,4 +24,5 @@ interface QueueRepository {
     suspend fun getDoctorSchedule(doctorId: String): List<DailyScheduleData>
     suspend fun updateDoctorSchedule(doctorId: String, newSchedule: List<DailyScheduleData>): Result<Unit>
     suspend fun updateEstimatedServiceTime(doctorId: String, minutes: Int): Result<Unit>
+    suspend fun updatePatientCallTimeLimit(doctorId: String, minutes: Int): Result<Unit>
 }

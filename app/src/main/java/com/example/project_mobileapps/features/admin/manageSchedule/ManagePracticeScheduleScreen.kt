@@ -6,41 +6,95 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.project_mobileapps.data.local.DailyScheduleData
+import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
 
-@Composable
-fun ManagePracticeScheduleScreen(viewModel: ManagePracticeScheduleViewModel) {
-    val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
+    @Composable
+    fun ManagePracticeScheduleScreen(viewModel: ManagePracticeScheduleViewModel) {
+        val uiState by viewModel.uiState.collectAsState()
+        val context = LocalContext.current
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text(
-            "Atur Jadwal Praktik",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+        var showSaveConfirmation by remember { mutableStateOf(false) }
 
-        if (uiState.isLoading) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+        if (showSaveConfirmation) {
+            ConfirmationBottomSheet(
+                onDismiss = { showSaveConfirmation = false },
+                onConfirm = {
+                    showSaveConfirmation = false
+                    viewModel.saveSchedule(context)
+                },
+                title = "Simpan Perubahan Jadwal?",
+                text = "Semua perubahan pada jadwal mingguan dan pengaturan waktu akan disimpan. Apakah Anda yakin?"
+            )
+        }
+
+        // LazyColumn menjadi pembungkus utama agar seluruh layar bisa di-scroll
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp)
+        ) {
+            // Item 1: Judul Halaman (sekarang bisa ikut scroll)
+            item {
+                Text(
+                    text = "Atur Jadwal & Waktu",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // Item 2: Kartu Pengatur Waktu
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(horizontal = 16.dp)) {
+                        CallTimeLimitSelector(
+                            currentTime = uiState.callTimeLimit,
+                            onTimeChange = viewModel::onCallTimeLimitChange
+                        )
+                        Divider()
+                        ServiceTimeSelector(
+                            currentTime = uiState.estimatedServiceTime,
+                            onTimeChange = viewModel::onServiceTimeChange
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // Item 3: Judul Jadwal Mingguan
+            item {
+                Text(
+                    "Jadwal Mingguan",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // Item 4 dst.: Daftar Jadwal Hari
+            if (uiState.isLoading) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+            } else {
                 items(uiState.schedules) { schedule ->
                     ScheduleDayRow(
                         scheduleData = schedule,
@@ -54,21 +108,24 @@ fun ManagePracticeScheduleScreen(viewModel: ManagePracticeScheduleViewModel) {
                     Divider()
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = { viewModel.saveSchedule(context) },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !uiState.isSaving
-            ) {
-                if (uiState.isSaving) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                } else {
-                    Text("Simpan Perubahan")
+
+            // Item Terakhir: Tombol Simpan
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = { showSaveConfirmation = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.isSaving
+                ) {
+                    if (uiState.isSaving) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Simpan Jadwal")
+                    }
                 }
             }
         }
     }
-}
 
 @Composable
 fun ScheduleDayRow(
@@ -77,8 +134,6 @@ fun ScheduleDayRow(
     onTimeChange: (hour: Int, minute: Int, isStartTime: Boolean) -> Unit
 ) {
     val context = LocalContext.current
-
-    // Fungsi untuk menampilkan Time Picker
     val showTimePicker = { isStartTime: Boolean ->
         val timeParts = (if (isStartTime) scheduleData.startTime else scheduleData.endTime).split(":")
         val initialHour = timeParts[0].toInt()
@@ -89,7 +144,7 @@ fun ScheduleDayRow(
             { _, hour, minute -> onTimeChange(hour, minute, isStartTime) },
             initialHour,
             initialMinute,
-            true // 24-hour format
+            true
         ).show()
     }
 
@@ -136,3 +191,70 @@ fun ScheduleDayRow(
         }
     }
 }
+
+    @Composable
+    private fun CallTimeLimitSelector(
+        currentTime: Int,
+        onTimeChange: (Int) -> Unit
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Batas Waktu Panggil", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                Text("Waktu tunggu pasien setelah dipanggil", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                IconButton(onClick = { onTimeChange(-1) }, enabled = currentTime > 1) {
+                    Icon(Icons.Default.Remove, "Kurangi")
+                }
+                Text(
+                    "$currentTime min",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(onClick = { onTimeChange(1) }, enabled = currentTime < 60) {
+                    Icon(Icons.Default.Add, "Tambah")
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun ServiceTimeSelector(
+        currentTime: Int,
+        onTimeChange: (Int) -> Unit
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // TAMBAHKAN MODIFIER.WEIGHT(1f) DI SINI
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Estimasi Waktu Layanan", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                Text("Durasi rata-rata per pasien",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                IconButton(onClick = { onTimeChange(-1) }, enabled = currentTime > 5) {
+                    Icon(Icons.Default.Remove, "Kurangi")
+                }
+                Text("$currentTime min", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                IconButton(onClick = { onTimeChange(1) }, enabled = currentTime < 60) {
+                    Icon(Icons.Default.Add, "Tambah")
+                }
+            }
+        }
+    }

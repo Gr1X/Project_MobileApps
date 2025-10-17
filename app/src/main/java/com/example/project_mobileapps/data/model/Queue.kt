@@ -28,5 +28,6 @@ data class PracticeStatus(
     val isPracticeOpen: Boolean = false,
     var totalServed: Int = 0,
     val openingHour: Int = 9,
-    val closingHour: Int = 17 // <-- TAMBAHKAN JAM TUTUP (17:00)
+    val closingHour: Int = 17,
+    val patientCallTimeLimitMinutes: Int = 15
 )

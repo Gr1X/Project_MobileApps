@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.example.project_mobileapps.data.local.DailyScheduleData
+import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.features.admin.manageSchedule.PatientQueueDetails
 import java.text.SimpleDateFormat
@@ -100,8 +101,7 @@ fun DoctorDashboardHeader(uiState: DoctorUiState) {
         )
         Spacer(Modifier.height(24.dp))
 
-        // PANGGIL COMPOSABLE BARU DI SINI
-        PracticeStatusCard(schedule = uiState.todaySchedule)
+        PracticeStatusCard(practiceStatus = uiState.practiceStatus, schedule = uiState.todaySchedule)
 
         Spacer(Modifier.height(24.dp))
 
@@ -278,8 +278,8 @@ fun DetailRow(label: String, value: String) {
 }
 
 @Composable
-fun PracticeStatusCard(schedule: DailyScheduleData?) {
-    val isPracticeOpen = schedule?.isOpen ?: false
+fun PracticeStatusCard(practiceStatus: PracticeStatus?, schedule: DailyScheduleData?) {
+    val isPracticeOpen = practiceStatus?.isPracticeOpen ?: false
     val statusText = if (isPracticeOpen) "BUKA" else "TUTUP"
     val statusColor = if (isPracticeOpen) Color(0xFF00C853) else MaterialTheme.colorScheme.error
     val jamPraktik = if (schedule != null && schedule.isOpen) "${schedule.startTime} - ${schedule.endTime}" else "Tidak ada jadwal hari ini"

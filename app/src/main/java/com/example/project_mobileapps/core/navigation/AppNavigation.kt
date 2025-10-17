@@ -179,7 +179,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 NewsScreen(
                     onNewsClick = { encodedUrl ->
                         navController.navigate("articleDetail/$encodedUrl")
-                    }
+                    },
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
 

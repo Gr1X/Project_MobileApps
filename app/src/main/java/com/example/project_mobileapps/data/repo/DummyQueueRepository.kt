@@ -9,11 +9,14 @@ import com.example.project_mobileapps.data.model.HistoryItem
 import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.model.QueueItem
 import com.example.project_mobileapps.data.model.QueueStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Calendar
@@ -21,8 +24,8 @@ import java.util.Locale
 
 object DummyQueueRepository : QueueRepository {
 
+    private val repositoryScope = CoroutineScope(Dispatchers.Default)
     private val doctorList = mapOf("doc_123" to "Dr. Budi Santoso")
-    private val FIFTEEN_MINUTES_IN_MS = 15 * 60 * 1000 // Koreksi: 15 menit
 
     private fun isCurrentlyOpen(doctorId: String): Boolean {
         val schedules = DummyScheduleDatabase.weeklySchedules[doctorId] ?: return false
@@ -64,6 +67,32 @@ object DummyQueueRepository : QueueRepository {
         ))
     )
 
+    // --- PERUBAHAN 2: Tambahkan blok init untuk menjalankan timer ---
+    init {
+        repositoryScope.launch {
+            while (true) {
+                // Cek status setiap 1 menit (60000 milidetik)
+                updatePracticeStatusBasedOnTime("doc_123")
+                delay(60_000L)
+            }
+        }
+    }
+
+    // --- PERUBAHAN 3: Buat fungsi terpisah untuk update status ---
+    private fun updatePracticeStatusBasedOnTime(doctorId: String) {
+        val isOpenNow = isCurrentlyOpen(doctorId)
+        _practiceStatusFlow.update { currentMap ->
+            val currentStatus = currentMap[doctorId]
+            if (currentStatus != null && currentStatus.isPracticeOpen != isOpenNow) {
+                currentMap.toMutableMap().apply {
+                    this[doctorId] = currentStatus.copy(isPracticeOpen = isOpenNow)
+                }
+            } else {
+                currentMap
+            }
+        }
+    }
+
     private fun getTodaySchedule(doctorId: String): DailyScheduleData? {
         val schedules = DummyScheduleDatabase.weeklySchedules[doctorId] ?: return null
         val calendar = Calendar.getInstance()
@@ -87,17 +116,20 @@ object DummyQueueRepository : QueueRepository {
             QueueItem(8, "pasien02", "Citra Lestari", "doc_123", "Demam", QueueStatus.MENUNGGU)
         )
     )
-    override val dailyQueuesFlow: StateFlow<List<QueueItem>> = _dailyQueuesFlow.asStateFlow()
 
+    override val dailyQueuesFlow: StateFlow<List<QueueItem>> = _dailyQueuesFlow.asStateFlow()
 
     override suspend fun checkForLatePatients(doctorId: String) {
         val now = Date().time
+        val practiceStatus = _practiceStatusFlow.value[doctorId] ?: return
+        val timeLimitMs = practiceStatus.patientCallTimeLimitMinutes * 60 * 1000L
+
         _dailyQueuesFlow.update { currentList ->
             val (latePatients, onTimePatients) = currentList.partition { item ->
-                item.status == QueueStatus.DIPANGGIL && !item.hasBeenLate &&
-                        item.calledAt?.let { calledTime ->
-                            (now - calledTime.time > FIFTEEN_MINUTES_IN_MS)
-                        } ?: false
+                item.status == QueueStatus.DIPANGGIL &&
+                        item.calledAt != null &&
+                        (now - item.calledAt!!.time > timeLimitMs) &&
+                        !item.hasBeenLate
             }
 
             if (latePatients.isNotEmpty()) {
@@ -116,8 +148,21 @@ object DummyQueueRepository : QueueRepository {
         }
     }
 
+    override suspend fun updatePatientCallTimeLimit(doctorId: String, minutes: Int): Result<Unit> {
+        delay(100)
+        _practiceStatusFlow.update { statusMap ->
+            statusMap.toMutableMap().apply {
+                val currentStatus = this[doctorId]
+                if (currentStatus != null) {
+                    this[doctorId] = currentStatus.copy(patientCallTimeLimitMinutes = minutes)
+                }
+            }
+        }
+        return Result.success(Unit)
+    }
+
     override suspend fun takeQueueNumber(doctorId: String, userId: String, userName: String, keluhan: String): Result<QueueItem> {
-        delay(500) // Simulasi jeda jaringan
+        delay(500)
         val currentStatus = _practiceStatusFlow.value[doctorId] ?: return Result.failure(Exception("Dokter tidak ditemukan"))
         val currentQueue = _dailyQueuesFlow.value
 
