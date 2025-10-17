@@ -25,11 +25,8 @@ fun BottomNavBar(navController: NavController) {
                 icon = { Icon(item.icon, contentDescription = item.label) },
                 label = { Text(item.label) },
                 selected = currentRoute == item.route,
-                // --- PERBAIKAN UTAMA ADA DI BLOK onClick DI BAWAH INI ---
                 onClick = {
                     navController.navigate(item.route) {
-                        // Pop up ke destinasi awal dari graph untuk menghindari penumpukan back stack
-                        // saat memilih item yang sama berulang kali.
                         popUpTo(navController.graph.findStartDestination().id) {
                             saveState = true
                         }

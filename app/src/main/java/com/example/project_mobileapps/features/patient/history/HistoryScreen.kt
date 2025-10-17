@@ -98,7 +98,10 @@ private fun HistoryItemCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = item.doctorName, style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(text = "Keluhan: ${item.initialComplaint}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(text = "Keluhan: ${item.initialComplaint}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(shape = RoundedCornerShape(16.dp), color = statusColor) {
                     Text(
@@ -113,7 +116,6 @@ private fun HistoryItemCard(
     }
 }
 
-// ... DateBlock dan EmptyHistoryView tidak berubah ...
 @Composable
 private fun DateBlock(dateString: String) {
     var day = ""

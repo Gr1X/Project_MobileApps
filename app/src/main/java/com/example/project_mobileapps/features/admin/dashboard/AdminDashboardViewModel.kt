@@ -1,91 +1,67 @@
+// Salin dan ganti seluruh isi file: features/admin/dashboard/AdminDashboardViewModel.kt
+
 package com.example.project_mobileapps.features.admin.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.project_mobileapps.data.local.DailyReport
 import com.example.project_mobileapps.data.local.DailyScheduleData
 import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.model.QueueItem
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.repo.QueueRepository
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.*
-import java.util.concurrent.TimeUnit
+import java.util.Calendar
 
+// UI State yang sudah disederhanakan (tanpa data laporan)
 data class AdminDashboardUiState(
     val practiceStatus: PracticeStatus? = null,
     val isLoading: Boolean = true,
     val totalPatientsToday: Int = 0,
     val patientsWaiting: Int = 0,
     val patientsFinished: Int = 0,
-    val weeklyReport: List<DailyReport> = emptyList(),
     val top5ActiveQueue: List<QueueItem> = emptyList(),
-    val doctorScheduleToday: DailyScheduleData? = null,
-    val avgServiceTimeMinutes: Long = 0
+    val doctorScheduleToday: DailyScheduleData? = null
 )
 
 class AdminDashboardViewModel(private val queueRepository: QueueRepository) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(AdminDashboardUiState())
-    val uiState: StateFlow<AdminDashboardUiState> = _uiState.asStateFlow()
+    // Hanya combine data yang dibutuhkan, tanpa filter laporan
+    val uiState: StateFlow<AdminDashboardUiState> = combine(
+        queueRepository.dailyQueuesFlow,
+        queueRepository.practiceStatusFlow
+    ) { queues, statuses ->
 
-    init {
-        fetchData()
-    }
+        val today = Calendar.getInstance()
+        val isSameDay = { d1: Calendar, d2: Calendar -> d1.get(Calendar.YEAR) == d2.get(Calendar.YEAR) && d1.get(Calendar.DAY_OF_YEAR) == d2.get(Calendar.DAY_OF_YEAR) }
+        val queuesToday = queues.filter { val qd = Calendar.getInstance().apply { time = it.createdAt }; isSameDay(today, qd) }
 
-    private fun fetchData() {
-        viewModelScope.launch {
-            combine(
-                queueRepository.dailyQueuesFlow,
-                queueRepository.practiceStatusFlow
-            ) { queues, statuses ->
-                // Buat data sementara di dalam combine
-                Pair(queues, statuses)
-            }.collect { (queues, statuses) ->
-                // Lakukan suspend call di dalam collect
-                val report = queueRepository.getWeeklyReport()
-                val schedule = queueRepository.getDoctorSchedule("doc_123")
+        val practiceStatus = statuses["doc_123"]
+        val weeklySchedule = queueRepository.getDoctorSchedule("doc_123")
+        val dayOfWeekInt = today.get(Calendar.DAY_OF_WEEK)
+        val dayMapping = listOf("Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu")
+        val currentDayString = dayMapping[dayOfWeekInt - 1]
+        val todaySchedule = weeklySchedule.find { it.dayOfWeek.equals(currentDayString, ignoreCase = true) }
 
-                val finishedQueuesToday = queues.filter { it.status == QueueStatus.SELESAI }
-                val avgServiceTime = if (finishedQueuesToday.isNotEmpty()) {
-                    finishedQueuesToday
-                        .filter { it.startedAt != null && it.finishedAt != null }
-                        .map { TimeUnit.MILLISECONDS.toMinutes(it.finishedAt!!.time - it.startedAt!!.time) }
-                        .average()
-                        .toLong()
-                } else {
-                    0L
-                }
-                val total = queues.count { it.status != QueueStatus.DIBATALKAN }
-                val waiting = queues.count { it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL }
-                val finished = queues.count { it.status == QueueStatus.SELESAI }
-                val activeQueues = queues
-                    .filter { it.status != QueueStatus.SELESAI && it.status != QueueStatus.DIBATALKAN }
-                    .sortedBy { it.queueNumber }
+        val activeQueues = queuesToday
+            .filter { it.status in listOf(QueueStatus.DILAYANI, QueueStatus.DIPANGGIL, QueueStatus.MENUNGGU) }
+            .sortedBy { it.queueNumber }
+            .take(5)
 
-                val calendar = Calendar.getInstance()
-                val dayOfWeekName = SimpleDateFormat("EEEE", Locale("id", "ID")).format(calendar.time)
-                val todaySchedule = schedule.find { it.dayOfWeek.equals(dayOfWeekName, ignoreCase = true) }
-
-                _uiState.update { currentState ->
-                    currentState.copy(
-                        practiceStatus = statuses["doc_123"],
-                        isLoading = false,
-                        totalPatientsToday = total,
-                        patientsWaiting = waiting,
-                        patientsFinished = finished,
-                        weeklyReport = report,
-                        top5ActiveQueue = activeQueues.take(5),
-                        doctorScheduleToday = todaySchedule,
-                        avgServiceTimeMinutes = avgServiceTime
-                    )
-                }
-            }
-        }
-    }
+        AdminDashboardUiState(
+            isLoading = false,
+            practiceStatus = practiceStatus,
+            doctorScheduleToday = todaySchedule,
+            totalPatientsToday = queuesToday.size,
+            patientsWaiting = queuesToday.count { it.status in listOf(QueueStatus.MENUNGGU, QueueStatus.DIPANGGIL) },
+            patientsFinished = queuesToday.count { it.status == QueueStatus.SELESAI },
+            top5ActiveQueue = activeQueues
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = AdminDashboardUiState()
+    )
 }
 
 class AdminDashboardViewModelFactory(

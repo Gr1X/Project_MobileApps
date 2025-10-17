@@ -117,12 +117,10 @@ private fun QueueInfoCard(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Bagian Atas Kartu (Info Buka/Tutup & Nomor Antrian)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Top
             ) {
-                // Info Jadwal
                 Column(
                     modifier = Modifier.weight(1f).width(IntrinsicSize.Max),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -157,7 +155,6 @@ private fun QueueInfoCard(
 
                 Spacer(modifier = Modifier.width(16.dp))
 
-                // Info Nomor Antrian
                 Column(
                     modifier = Modifier.weight(1f),
                     horizontalAlignment = Alignment.CenterHorizontally

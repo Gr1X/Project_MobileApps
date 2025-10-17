@@ -1,134 +1,166 @@
-// File: features/admin/reports/ReportViewModel.kt
+// Salin dan ganti seluruh isi file: features/admin/reports/ReportViewModel.kt
+
 package com.example.project_mobileapps.features.admin.reports
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.project_mobileapps.data.local.DailyReport
 import com.example.project_mobileapps.data.model.QueueItem
 import com.example.project_mobileapps.data.model.QueueStatus
+import com.example.project_mobileapps.data.model.User
+import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.data.repo.QueueRepository
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
-enum class ReportRange(val days: Int, val displayName: String) {
-    TODAY(1, "Hari Ini"),
-    LAST_7_DAYS(7, "7 Hari Terakhir"),
-    LAST_30_DAYS(30, "30 Hari Terakhir")
+// Enum Filter Primer
+enum class ReportPeriod(val displayName: String) {
+    HARIAN("Harian"),
+    MINGGUAN("Mingguan"),
+    BULANAN("Bulanan"),
+    TAHUNAN("Tahunan")
 }
 
 data class ReportUiState(
-    val selectedRange: ReportRange = ReportRange.LAST_7_DAYS,
     val isLoading: Boolean = true,
     val totalPatientsServed: Int = 0,
     val avgPatientsPerDay: Double = 0.0,
     val avgServiceTimeMinutes: Long = 0,
     val cancellationRate: Float = 0f,
-    val busiestDay: String = "-",
-    val dailyPatientTrend: List<DailyReport> = emptyList(),
-    val peakHoursDistribution: List<Pair<String, Int>> = emptyList(),
-    val detailedQueues: List<QueueItem> = emptyList()
+    val chartData: List<DailyReport> = emptyList(),
+    val uniquePatients: List<User> = emptyList(),
+    val selectedPeriod: ReportPeriod = ReportPeriod.HARIAN,
+    val availableYears: List<Int> = emptyList(),
+    val availableMonths: List<String> = listOf("Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"),
+    val selectedYear: Int = Calendar.getInstance().get(Calendar.YEAR),
+    val selectedMonth: Int = Calendar.getInstance().get(Calendar.MONTH)
 )
 
-class ReportViewModel(private val queueRepository: QueueRepository) : ViewModel() {
+class ReportViewModel(
+    private val queueRepository: QueueRepository,
+    private val authRepository: AuthRepository
+) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ReportUiState())
-    val uiState: StateFlow<ReportUiState> = _uiState.asStateFlow()
+    private val _selectedPeriod = MutableStateFlow(ReportPeriod.HARIAN)
+    private val _selectedYear = MutableStateFlow(Calendar.getInstance().get(Calendar.YEAR))
+    private val _selectedMonth = MutableStateFlow(Calendar.getInstance().get(Calendar.MONTH))
 
-    private val _selectedRange = MutableStateFlow(ReportRange.LAST_7_DAYS)
+    val uiState: StateFlow<ReportUiState> = combine(
+        queueRepository.dailyQueuesFlow,
+        _selectedPeriod,
+        _selectedYear,
+        _selectedMonth
+    ) { allQueues, period, year, month ->
+        processReportData(allQueues, period, year, month)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ReportUiState()
+    )
 
-    init {
-        viewModelScope.launch {
-            combine(
-                queueRepository.dailyQueuesFlow,
-                _selectedRange
-            ) { allQueues, range ->
-                processReportData(allQueues, range)
-            }.collect { newState ->
-                _uiState.update { newState }
+    fun setPeriod(period: ReportPeriod) { _selectedPeriod.value = period }
+    fun setYear(year: Int) { _selectedYear.value = year }
+    fun setMonth(month: Int) { _selectedMonth.value = month }
+
+    private fun processReportData(
+        queues: List<QueueItem>,
+        period: ReportPeriod,
+        year: Int,
+        month: Int
+    ): ReportUiState {
+        val calendar = Calendar.getInstance()
+        val allUsers = authRepository.getAllUsers()
+
+        // --- Tentukan Rentang Tanggal ---
+        val (startDate, endDate) = when (period) {
+            ReportPeriod.HARIAN -> {
+                calendar.firstDayOfWeek = Calendar.MONDAY
+                calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                val start = calendar.time
+                calendar.add(Calendar.DAY_OF_YEAR, 6)
+                val end = calendar.time
+                Pair(start, end)
+            }
+            ReportPeriod.MINGGUAN -> {
+                calendar.set(year, month, 1)
+                val start = calendar.time
+                calendar.add(Calendar.MONTH, 1)
+                calendar.add(Calendar.DAY_OF_YEAR, -1)
+                val end = calendar.time
+                Pair(start, end)
+            }
+            ReportPeriod.BULANAN -> {
+                calendar.set(year, 0, 1)
+                val start = calendar.time
+                calendar.add(Calendar.YEAR, 1)
+                calendar.add(Calendar.DAY_OF_YEAR, -1)
+                val end = calendar.time
+                Pair(start, end)
+            }
+            ReportPeriod.TAHUNAN -> {
+                // Ambil semua data untuk perbandingan tahunan
+                Pair(Date(0), Date())
             }
         }
-    }
 
-    fun setReportRange(range: ReportRange) {
-        _selectedRange.value = range
-    }
-
-    private fun processReportData(queues: List<QueueItem>, range: ReportRange): ReportUiState {
-        val calendar = Calendar.getInstance()
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.add(Calendar.DAY_OF_YEAR, -(range.days - 1))
-        val startDate = calendar.time
-        val filteredQueues = queues.filter { it.createdAt.after(startDate) }
+        // --- Filter Antrian & Kalkulasi KPI ---
+        val filteredQueues = queues.filter { it.createdAt.after(startDate) && it.createdAt.before(endDate) }
         val servedQueues = filteredQueues.filter { it.status == QueueStatus.SELESAI }
         val totalServed = servedQueues.size
-        val avgPatients = if (range.days > 0) totalServed.toDouble() / range.days else 0.0
-        val avgServiceTime = servedQueues
-            .filter { it.startedAt != null && it.finishedAt != null }
-            .map { TimeUnit.MILLISECONDS.toMinutes(it.finishedAt!!.time - it.startedAt!!.time) }
-            .average()
-            .toLong()
 
-        val totalCancelled = filteredQueues.count { it.status == QueueStatus.DIBATALKAN }
-        val cancellationRate = if (filteredQueues.isNotEmpty()) {
-            (totalCancelled.toFloat() / filteredQueues.size) * 100
-        } else 0f
 
-        val dailyCounts = filteredQueues
-            .groupBy {
-                val cal = Calendar.getInstance().apply { time = it.createdAt }
-                cal.get(Calendar.DAY_OF_WEEK)
+        // --- Agregasi Data Grafik ---
+        val chartData = when (period) {
+            ReportPeriod.HARIAN -> {
+                val dailyCounts = servedQueues.groupBy { Calendar.getInstance().apply { time = it.createdAt }.get(Calendar.DAY_OF_WEEK) }
+                listOf("Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab").mapIndexed { index, dayName ->
+                    DailyReport(dayName, dailyCounts[index + 1]?.size ?: 0)
+                }
             }
-            .mapValues { it.value.size }
-
-        val dayNames = listOf("Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab")
-        val dailyTrend = dayNames.mapIndexed { index, dayName ->
-            DailyReport(dayName, dailyCounts[index + 1] ?: 0)
+            ReportPeriod.MINGGUAN -> {
+                val weeklyCounts = servedQueues.groupBy { Calendar.getInstance().apply { time = it.createdAt }.get(Calendar.WEEK_OF_MONTH) }
+                (1..5).map { weekNum -> DailyReport("W$weekNum", weeklyCounts[weekNum]?.size ?: 0) }
+            }
+            ReportPeriod.BULANAN -> {
+                val monthlyCounts = servedQueues.groupBy { Calendar.getInstance().apply { time = it.createdAt }.get(Calendar.MONTH) }
+                uiState.value.availableMonths.mapIndexed { index, monthName ->
+                    DailyReport(monthName.take(3), monthlyCounts[index]?.size ?: 0)
+                }
+            }
+            ReportPeriod.TAHUNAN -> {
+                val yearlyCounts = servedQueues.groupBy { Calendar.getInstance().apply { time = it.createdAt }.get(Calendar.YEAR) }
+                yearlyCounts.map { DailyReport(it.key.toString(), it.value.size) }.sortedBy { it.day }
+            }
         }
 
-        val busiestDayName = dailyCounts.maxByOrNull { it.value }?.key?.let { dayIndex ->
-            dayNames.getOrElse(dayIndex - 1) { "-" }
-        } ?: "-"
 
-        val hourlyCounts = filteredQueues
-            .groupBy {
-                val cal = Calendar.getInstance().apply { time = it.createdAt }
-                cal.get(Calendar.HOUR_OF_DAY)
-            }
-            .mapValues { it.value.size }
-
-        val peakHoursData = (8..17).map { hour ->
-            val hourString = String.format("%02d:00", hour)
-            hourString to (hourlyCounts[hour] ?: 0)
-        }
+        val uniquePatientIds = filteredQueues.map { it.userId }.distinct()
+        val uniquePatients = allUsers.filter { it.uid in uniquePatientIds }
 
         return ReportUiState(
-            selectedRange = range,
             isLoading = false,
             totalPatientsServed = totalServed,
-            avgPatientsPerDay = avgPatients,
-            avgServiceTimeMinutes = avgServiceTime,
-            cancellationRate = cancellationRate,
-            busiestDay = busiestDayName,
-            dailyPatientTrend = dailyTrend,
-            peakHoursDistribution = peakHoursData,
-            detailedQueues = filteredQueues
+            chartData = chartData,
+            uniquePatients = uniquePatients,
+            selectedPeriod = period,
+            selectedYear = year,
+            selectedMonth = month,
+            availableYears = queues.map { Calendar.getInstance().apply { time = it.createdAt }.get(Calendar.YEAR) }.distinct().sorted()
         )
     }
 }
 
-
-class ReportViewModelFactory(private val queueRepository: QueueRepository) : ViewModelProvider.Factory {
+class ReportViewModelFactory(
+    private val queueRepository: QueueRepository,
+    private val authRepository: AuthRepository // <-- Pastikan ini ada
+) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ReportViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return ReportViewModel(queueRepository) as T
+            return ReportViewModel(queueRepository, authRepository) as T // <-- Pastikan authRepository diteruskan
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
