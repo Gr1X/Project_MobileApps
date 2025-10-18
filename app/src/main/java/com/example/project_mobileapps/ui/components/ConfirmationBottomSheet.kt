@@ -12,7 +12,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.project_mobileapps.ui.themes.PrimaryPeriwinkle // Pastikan import ini sesuai
 import kotlinx.coroutines.launch
-
+/**
+ * Composable reusable untuk menampilkan Modal Bottom Sheet konfirmasi.
+ * Menampilkan judul, teks deskripsi, dan dua tombol aksi (Konfirmasi & Batal).
+ *
+ * @param onDismiss Callback yang dipanggil saat bottom sheet ditutup (baik oleh user
+ * swipe ke bawah, klik di luar, atau klik tombol Batal).
+ * @param onConfirm Callback yang dipanggil saat tombol "Konfirmasi" diklik.
+ * @param title Judul yang ditampilkan di bagian atas bottom sheet.
+ * @param text Teks deskripsi/pertanyaan konfirmasi.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConfirmationBottomSheet(
@@ -25,6 +34,10 @@ fun ConfirmationBottomSheet(
     val sheetState = rememberModalBottomSheetState()
 
     // Fungsi pembantu untuk menutup sheet dengan animasi
+    /**
+     * Fungsi helper internal untuk menutup bottom sheet dengan animasi.
+     * Memanggil [sheetState.hide] lalu [onDismiss] setelah animasi selesai.
+     */
     val closeSheet: () -> Unit = {
         scope.launch {
             sheetState.hide()

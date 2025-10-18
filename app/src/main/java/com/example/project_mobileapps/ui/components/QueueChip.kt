@@ -20,14 +20,29 @@ import com.example.project_mobileapps.data.model.QueueStatus
 import kotlinx.coroutines.delay
 import java.util.Date
 import java.util.concurrent.TimeUnit
-
+/**
+ * Composable reusable untuk menampilkan chip antrian individual.
+ * Chip ini menampilkan nomor antrian dan status/timer.
+ * Tampilannya (warna, teks bawah) berubah berdasarkan status antrian
+ * ([QueueStatus.DILAYANI], [QueueStatus.DIPANGGIL], [QueueStatus.MENUNGGU], dll.)
+ * dan posisinya dalam antrian ([isFirstInLine]).
+ *
+ * @param queueItem Data [QueueItem] yang akan ditampilkan.
+ * @param isFirstInLine Boolean yang menandakan apakah chip ini adalah yang pertama
+ * dalam daftar antrian aktif (digunakan untuk logika timer countdown 'Dipanggil').
+ */
 @Composable
 fun QueueChip(
     queueItem: QueueItem,
     isFirstInLine: Boolean
 ) {
     var timerText by remember { mutableStateOf("") }
-
+    /**
+     * [LaunchedEffect] ini bertanggung jawab untuk logika timer (stopwatch/countdown)
+     * atau menampilkan teks status biasa.
+     * `key` = status, startedAt, calledAt: Efek ini akan dibatalkan dan dijalankan ulang
+     * jika salah satu dari nilai ini berubah untuk `queueItem` ini.
+     */
     LaunchedEffect(queueItem.status, queueItem.startedAt, queueItem.calledAt) {
         when {
             // KASUS 1: Pasien sedang DILAYANI (timer berjalan naik)

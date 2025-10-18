@@ -28,7 +28,14 @@ import com.example.project_mobileapps.ui.themes.TextSecondary
 
 private enum class AuthTab { LOGIN, REGISTER }
 
-
+/**
+ * Composable utama untuk layar Autentikasi (Login dan Register).
+ * Layar ini bersifat stateful, mengamati [AuthState] dari [authViewModel].
+ *
+ * @param authViewModel ViewModel yang menyediakan state dan logika untuk autentikasi.
+ * @param startScreen Menentukan tab mana ("login" atau "register") yang aktif saat pertama kali dibuka.
+ * @param onAuthSuccess Callback yang dipanggil saat login/register berhasil, membawa data [User].
+ */
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun AuthScreen(
@@ -39,7 +46,11 @@ fun AuthScreen(
     val authState by authViewModel.authState.collectAsState()
     var selectedTab by remember { mutableStateOf(if (startScreen == "login") AuthTab.LOGIN else AuthTab.REGISTER) }
     var rememberMe by remember { mutableStateOf(false) }
-
+    /**
+     * [LaunchedEffect] ini mengamati perubahan pada [authState.loggedInUser].
+     * Jika `loggedInUser` tidak lagi null (artinya login berhasil),
+     * ia akan memanggil [onAuthSuccess] untuk memicu navigasi.
+     */
     LaunchedEffect(authState.loggedInUser) {
         authState.loggedInUser?.let(onAuthSuccess)
     }
@@ -63,7 +74,10 @@ fun AuthScreen(
                 authViewModel.resetAuthState()
             }
             Spacer(modifier = Modifier.height(32.dp))
-
+            /**
+             * [AnimatedContent] untuk menganimasikan perpindahan
+             * antara form Login dan form Register.
+             */
             AnimatedContent(
                 targetState = selectedTab,
                 transitionSpec = { fadeIn(tween(200, 90)) togetherWith fadeOut(tween(90)) },
@@ -143,6 +157,9 @@ fun AuthScreen(
         }
     }
 }
+/**
+ * Composable helper (private) untuk menampilkan judul header.
+ */
 @Composable
 private fun AuthHeader(selectedTab: AuthTab) {
     val title = if (selectedTab == AuthTab.LOGIN) "Login ke Akun Anda" else "Buat Akun untuk Memulai"
@@ -152,7 +169,9 @@ private fun AuthHeader(selectedTab: AuthTab) {
         textAlign = TextAlign.Center
     )
 }
-
+/**
+ * Composable helper (private) untuk menampilkan tombol toggle Login/Daftar.
+ */
 @Composable
 private fun AuthTabSelector(selectedTab: AuthTab, onTabSelected: (AuthTab) -> Unit) {
     Card(
@@ -185,6 +204,9 @@ private fun AuthTabSelector(selectedTab: AuthTab, onTabSelected: (AuthTab) -> Un
 }
 
 // Menggunakan OutlinedTextField agar sesuai dengan tema terang
+/**
+ * Composable helper (private) untuk field input form Login.
+ */
 @Composable
 private fun LoginFields(
     email: String, onEmailChange: (String) -> Unit,
@@ -211,7 +233,9 @@ private fun LoginFields(
         )
     }
 }
-
+/**
+ * Composable helper (private) untuk field input form Register.
+ */
 @Composable
 private fun RegisterFields(
     name: String, onNameChange: (String) -> Unit,
@@ -247,7 +271,9 @@ private fun RegisterFields(
         )
     }
 }
-
+/**
+ * Composable helper (private) untuk divider "Atau lanjutkan dengan".
+ */
 @Composable
 private fun DividerWithText(text: String) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
@@ -256,7 +282,9 @@ private fun DividerWithText(text: String) {
         Divider(modifier = Modifier.weight(1f))
     }
 }
-
+/**
+ * Composable helper (private) untuk tombol Social Login (misal: Google).
+ */
 @Composable
 private fun SocialLoginButton(text: String, iconRes: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
     OutlinedButton(onClick = onClick, modifier = modifier.height(52.dp), shape = RoundedCornerShape(16.dp)) {

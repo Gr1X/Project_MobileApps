@@ -22,7 +22,20 @@ import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
-
+/**
+ * Model data (UI State) untuk [HomeScreen].
+ * Menggabungkan semua data yang diperlukan oleh UI Home Pasien.
+ *
+ * @property greeting Salam sapaan (misal: "Selamat Pagi").
+ * @property userName Nama pengguna yang sedang login.
+ * @property doctor Objek [Doctor] yang akan ditampilkan di kartu utama.
+ * @property activeQueue Antrian [QueueItem] milik pengguna yang sedang aktif (status MENUNGGU).
+ * @property practiceStatus Objek [PracticeStatus] dokter (buka/tutup, nomor saat ini, dll).
+ * @property currentlyServingPatient Pasien [QueueItem] yang sedang dilayani saat ini.
+ * @property upcomingQueue Daftar antrian yang akan datang (Menunggu, Dipanggil, Dilayani).
+ * @property availableSlots Jumlah slot antrian yang masih tersisa untuk hari ini.
+ * @property isLoading Menandakan apakah data awal sedang dimuat.
+ */
 data class HomeUiState(
     val greeting: String = "Selamat Datang",
     val userName: String = "Pengguna",
@@ -42,12 +55,17 @@ class HomeViewModel (
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
-
+    /**
+     * Blok inisialisasi. Dipanggil saat ViewModel dibuat.
+     * Memulai pengambilan data utama dan pengamat notifikasi.
+     */
     init {
         fetchAllHomeData()
         observeQueueForNotifications()
     }
-
+    /**
+     * Helper untuk memberikan sapaan berdasarkan jam.
+     */
     private fun getGreetingBasedOnTime(): String {
         val calendar = Calendar.getInstance()
         return when (calendar.get(Calendar.HOUR_OF_DAY)) {
@@ -57,7 +75,11 @@ class HomeViewModel (
             else -> "Selamat Malam"
         }
     }
-
+    /**
+     * Mengambil dan menggabungkan semua data yang diperlukan untuk Home Screen.
+     * Menggunakan `combine` untuk secara reaktif memperbarui [HomeUiState]
+     * setiap kali ada perubahan pada salah satu flow sumber.
+     */
     private fun fetchAllHomeData() {
         viewModelScope.launch {
             combine(
@@ -104,7 +126,11 @@ class HomeViewModel (
             }
         }
     }
-
+    /**
+     * Mengamati perubahan state (user, antrian, status) untuk memicu notifikasi in-app.
+     * Fungsi ini membandingkan `currentState` dengan `previousState`
+     * untuk mendeteksi perubahan spesifik.
+     */
     private fun observeQueueForNotifications() {
         viewModelScope.launch {
             val combinedFlow = combine(

@@ -7,7 +7,14 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.project_mobileapps.navigation.BottomNavItem
-
+/**
+ * Composable untuk menampilkan Bottom Navigation Bar.
+ * Menggunakan [NavigationBar] dan [NavigationBarItem] dari Material 3.
+ * Mengambil daftar item dari [BottomNavItem] dan menangani navigasi antar tab utama.
+ *
+ * @param navController [NavController] yang digunakan untuk navigasi antar tab.
+ * NavController ini biasanya adalah NavController *internal* untuk [MainScreen].
+ */
 @Composable
 fun BottomNavBar(navController: NavController) {
     val items = listOf(

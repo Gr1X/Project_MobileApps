@@ -14,7 +14,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-
+/**
+ * ViewModel untuk [DoctorDetailScreen].
+ * Bertanggung jawab untuk mengambil data profil, jadwal, dan status praktik
+ * dari seorang dokter berdasarkan `doctorId` yang diterima melalui navigasi.
+ *
+ * @param savedStateHandle Handle untuk mengakses argumen navigasi (dalam hal ini `doctorId`).
+ */
 class DoctorDetailViewModel(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -34,13 +40,21 @@ class DoctorDetailViewModel(
             fetchDoctorSchedule(doctorId)
         }
     }
-
+    /**
+     * Mengambil data profil dokter dari [DoctorRepository] secara asinkron.
+     * @param id ID dokter yang akan diambil datanya.
+     */
     private fun fetchDoctorById(id: String) {
         viewModelScope.launch {
             _doctor.value = repository.getDoctorById(id)
         }
     }
-
+    /**
+     * [StateFlow] yang diekspos ke UI untuk status praktik.
+     * Aliran ini *berasal* (derived) dari `practiceStatusFlow` milik [queueRepository].
+     * Menggunakan `.map` untuk mem-filter status hanya untuk `doctorId` yang relevan.
+     * `.stateIn` mengubahnya menjadi StateFlow yang efisien.
+     */
     val practiceStatus: StateFlow<PracticeStatus?> =
         queueRepository.practiceStatusFlow.map { it[doctorId] }
             .stateIn(
@@ -48,7 +62,10 @@ class DoctorDetailViewModel(
                 started = SharingStarted.WhileSubscribed(5000),
                 initialValue = null
             )
-
+    /**
+     * Mengambil data jadwal mingguan dokter dari [queueRepository] secara asinkron.
+     * @param id ID dokter yang jadwalnya akan diambil.
+     */
     private fun fetchDoctorSchedule(id: String) {
         viewModelScope.launch {
             _schedule.value = queueRepository.getDoctorSchedule(id)

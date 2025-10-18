@@ -21,7 +21,14 @@ import com.example.project_mobileapps.navigation.BottomNavItem
 import com.example.project_mobileapps.ui.components.BottomNavBar
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
-
+/**
+ * Composable root untuk alur (flow) utama Pasien setelah login.
+ * Layar ini mengatur [Scaffold] dengan [BottomNavBar] dan [NavHost]
+ * untuk 3 tab utama: Home, Queue, dan Profile.
+ *
+ * @param rootNavController [NavHostController] utama dari aplikasi. Digunakan untuk
+ * navigasi ke alur lain (seperti "doctorDetail", "news", atau "auth_flow" saat logout).
+ */
 @Composable
 fun MainScreen(rootNavController: NavHostController) {
     val mainNavController = rememberNavController()
@@ -52,7 +59,9 @@ fun MainScreen(rootNavController: NavHostController) {
                     onNewsClick = { rootNavController.navigate("news") }
                 )
             }
-
+            /**
+             * Rute untuk Tab Antrian [BottomNavItem.Queue.route]
+             */
             composable(BottomNavItem.Queue.route) {
                 val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory())
                 val homeUiState by homeViewModel.uiState.collectAsState()

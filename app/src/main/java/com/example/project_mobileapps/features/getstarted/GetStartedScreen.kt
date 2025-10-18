@@ -15,7 +15,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.project_mobileapps.R
-
+/**
+ * Composable untuk layar "Get Started" (Onboarding).
+ * Layar ini menampilkan gambar latar belakang, teks pengantar,
+ * dan dua tombol aksi untuk pengguna baru atau yang sudah punya akun.
+ *
+ * @param onGetStartedClick Callback yang dipanggil saat tombol "Mulai Sekarang" (Register) diklik.
+ * @param onLoginClick Callback yang dipanggil saat tombol "Saya Sudah Punya Akun" (Login) diklik.
+ */
 @Composable
 fun GetStartedScreen(
     onGetStartedClick: () -> Unit,

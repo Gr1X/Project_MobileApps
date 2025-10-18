@@ -16,7 +16,14 @@ import coil.compose.AsyncImage
 import com.example.project_mobileapps.R
 import com.example.project_mobileapps.data.model.Doctor
 import androidx.compose.material.icons.outlined.Schedule
-
+/**
+ * Composable reusable untuk menampilkan informasi ringkas dokter dalam sebuah [Card].
+ * Kartu ini menampilkan foto, nama, spesialisasi, dan jadwal ringkas dokter.
+ * Kartu ini juga bisa diklik.
+ *
+ * @param doctor Objek [Doctor] yang datanya akan ditampilkan.
+ * @param onClick Callback yang dipanggil saat kartu diklik.
+ */
 @Composable
 fun DoctorCard(
     doctor: Doctor,

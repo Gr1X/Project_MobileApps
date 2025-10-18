@@ -16,7 +16,14 @@ import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.di.AppContainer
 import com.example.project_mobileapps.features.admin.manageSchedule.*
 import kotlinx.coroutines.launch
-
+/**
+ * Composable root/utama untuk seluruh alur (flow) Dokter.
+ * Bertanggung jawab untuk menyiapkan [ModalNavigationDrawer], [Scaffold] (dengan TopAppBar),
+ * dan [NavHost] yang berisi semua layar khusus dokter (Dashboard, Antrian, Jadwal).
+ *
+ * @param onLogoutClick Callback yang dipanggil dari [DoctorDrawerContent]
+ * saat tombol logout diklik.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DoctorMainScreen(

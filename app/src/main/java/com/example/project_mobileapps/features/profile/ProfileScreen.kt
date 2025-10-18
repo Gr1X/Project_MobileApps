@@ -28,7 +28,16 @@ import com.example.project_mobileapps.R
 import com.example.project_mobileapps.data.model.Role
 import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
 import com.example.project_mobileapps.ui.themes.TextSecondary
-
+/**
+ * Composable untuk layar Profil utama (Tab Profil).
+ * Menampilkan data pengguna, menu navigasi, dan tombol logout.
+ *
+ * @param rootNavController NavController utama aplikasi (untuk navigasi ke flow lain).
+ * @param onLogoutClick Callback yang dipanggil saat logout dikonfirmasi.
+ * @param onNavigateToHistory Callback untuk navigasi ke layar Riwayat Kunjungan.
+ * @param onNavigateToEditProfile Callback untuk navigasi ke layar Edit Profil.
+ * @param viewModel ViewModel [ProfileViewModel] yang menyediakan data pengguna.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
@@ -166,7 +175,12 @@ fun ProfileScreen(
         }
     }
 }
-
+/**
+ * Composable helper (private) untuk satu item di menu profil (misal: "Riwayat Kunjungan").
+ * @param icon Ikon [ImageVector] di sebelah kiri.
+ * @param text Teks utama.
+ * @param onClick Aksi saat item diklik.
+ */
 @Composable
 private fun ProfileOptionItem(icon: ImageVector, text: String, onClick: () -> Unit) {
     ListItem(
@@ -185,7 +199,13 @@ private fun ProfileOptionItem(icon: ImageVector, text: String, onClick: () -> Un
         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
     )
 }
-
+/**
+ * Composable helper (private) untuk 'Role Switcher' (Fitur Development).
+ * Menampilkan [ExposedDropdownMenuBox] untuk memilih role.
+ *
+ * @param currentUserRole Role [Role] saat ini.
+ * @param onRoleSelected Callback yang dipanggil saat role baru dipilih.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoleSwitcher(

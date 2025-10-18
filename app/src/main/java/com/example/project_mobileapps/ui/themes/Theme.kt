@@ -10,6 +10,11 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 // 1. Definisikan LightColorScheme dengan palet warna baru kita
+/**
+ * Skema warna terang (light theme) kustom untuk aplikasi.
+ * Dibuat menggunakan [lightColorScheme] dan warna-warna yang didefinisikan di `Color.kt`.
+ * Nama properti (misal: `primary`, `onSurfaceVariant`) mengikuti konvensi Material Design 3.
+ */
 private val LightColorScheme = lightColorScheme(
     primary = PrimaryPeriwinkle,
     onPrimary = OnPrimary,
@@ -21,7 +26,13 @@ private val LightColorScheme = lightColorScheme(
     secondaryContainer = LightPurpleGray,
     onSecondaryContainer = PrimaryPeriwinkle
 )
-
+/**
+ * Fungsi Composable utama untuk menerapkan tema aplikasi.
+ * Membungkus seluruh konten aplikasi dengan [MaterialTheme].
+ * Tema ini dikunci ke mode terang (light mode).
+ *
+ * @param content Lambda Composable yang berisi UI aplikasi yang akan diberi tema.
+ */
 @Composable
 fun ProjectMobileAppsTheme(
     // 2. Kunci tema ke Light Mode dengan menghapus parameter darkTheme

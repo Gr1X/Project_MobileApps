@@ -29,14 +29,25 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-
+/**
+ * Composable utama untuk layar Dashboard Dokter.
+ * Ini adalah layar stateful yang mengamati [DoctorViewModel].
+ *
+ * @param viewModel ViewModel [DoctorViewModel] yang menyediakan [DoctorUiState].
+ * @param navController Kontroler navigasi (saat ini tidak digunakan di layar ini,
+ * tapi bagus untuk dimiliki jika ada navigasi keluar dari dashboard).
+ */
 @Composable
 fun DoctorDashboardScreen(
     viewModel: DoctorViewModel,
     navController: NavHostController
 ) {
     val uiState by viewModel.uiState.collectAsState()
-
+    /**
+     * Logika untuk menampilkan [PatientDetailBottomSheet].
+     * Jika [uiState.selectedPatient] tidak null, BottomSheet akan ditampilkan.
+     * `onDismiss` akan memanggil ViewModel untuk meng-clear state.
+     */
     if (uiState.selectedPatient != null) {
         PatientDetailBottomSheet(
             patientDetails = uiState.selectedPatient!!,
@@ -81,7 +92,10 @@ fun DoctorDashboardScreen(
         }
     }
 }
-
+/**
+ * Composable helper untuk bagian header dashboard.
+ * @param uiState State UI saat ini.
+ */
 
 @Composable
 fun DoctorDashboardHeader(uiState: DoctorUiState) {
@@ -111,7 +125,11 @@ fun DoctorDashboardHeader(uiState: DoctorUiState) {
         )
     }
 }
-
+/**
+ * Composable helper untuk menampilkan dua kartu statistik.
+ * @param nextQueue Nomor antrian berikutnya (String, bisa "-").
+ * @param waiting Jumlah total antrian (Int).
+ */
 @Composable
 fun StatsHeader(nextQueue: String, waiting: Int) {
     Row(
@@ -132,7 +150,13 @@ fun StatsHeader(nextQueue: String, waiting: Int) {
         )
     }
 }
-
+/**
+ * Composable helper (reusable) untuk satu kartu statistik.
+ * @param label Teks label (misal: "Total Antrian").
+ * @param value Teks nilai (misal: "5").
+ * @param icon Ikon untuk ditampilkan.
+ * @param modifier Modifier.
+ */
 @Composable
 fun StatCard(
     label: String,
@@ -162,7 +186,12 @@ fun StatCard(
         }
     }
 }
-
+/**
+ * Composable helper (reusable) untuk menampilkan info pasien di daftar antrian.
+ * @param patientDetails Data detail pasien dan antriannya.
+ * @param onClick Aksi yang dijalankan saat kartu diklik.
+ * @param modifier Modifier.
+ */
 @Composable
 fun SimplePatientInfoCard(
     patientDetails: PatientQueueDetails,
@@ -200,7 +229,10 @@ fun SimplePatientInfoCard(
         }
     }
 }
-
+/**
+ * Composable helper (reusable) untuk menampilkan chip status berwarna.
+ * @param status Enum [QueueStatus] yang akan ditampilkan.
+ */
 @Composable
 fun StatusChip(status: QueueStatus) {
     val (text, backgroundColor, contentColor) = when (status) {
@@ -222,6 +254,11 @@ fun StatusChip(status: QueueStatus) {
 }
 
 // Tambahkan kode ini di bagian bawah file DoctorDashboardScreen.kt
+/**
+ * Composable untuk Bottom Sheet yang menampilkan detail info pasien.
+ * @param patientDetails Data lengkap pasien yang dipilih.
+ * @param onDismiss Callback saat bottom sheet ditutup.
+ */
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -263,7 +300,11 @@ fun PatientDetailBottomSheet(
         }
     }
 }
-
+/**
+ * Composable helper (reusable) untuk baris detail di bottom sheet.
+ * @param label Label (misal: "Email").
+ * @param value Nilai (misal: "pasien@gmail.com").
+ */
 @Composable
 fun DetailRow(label: String, value: String) {
     Row(
@@ -276,7 +317,12 @@ fun DetailRow(label: String, value: String) {
         Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
     }
 }
-
+/**
+ * Composable helper (reusable) untuk kartu status praktik.
+ * Menampilkan BUKA/TUTUP, tanggal, dan jam praktik.
+ * @param practiceStatus Objek [PracticeStatus] dari state.
+ * @param schedule Objek [DailyScheduleData] dari state.
+ */
 @Composable
 fun PracticeStatusCard(practiceStatus: PracticeStatus?, schedule: DailyScheduleData?) {
     val isPracticeOpen = practiceStatus?.isPracticeOpen ?: false

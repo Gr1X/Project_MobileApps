@@ -23,7 +23,15 @@ import com.example.project_mobileapps.data.local.DailyScheduleData
 import com.example.project_mobileapps.ui.components.CircularBackButton
 import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
 import com.example.project_mobileapps.ui.themes.TextSecondary
-
+/**
+ * Composable untuk layar Detail Dokter, yang dilihat oleh Pasien.
+ * Menampilkan profil dokter, jadwal praktik, dan form untuk mengambil nomor antrian.
+ *
+ * @param viewModel ViewModel [DoctorDetailViewModel] yang menyediakan data dokter, jadwal, dan status.
+ * @param onBookingClick Callback yang dipanggil saat tombol "Ambil Nomor Antrian" dikonfirmasi.
+ * Membawa `doctorId` dan `keluhan`.
+ * @param onNavigateBack Callback untuk kembali ke layar sebelumnya.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DoctorDetailScreen(
@@ -166,6 +174,10 @@ fun DoctorDetailScreen(
 }
 
 // --- COMPOSABLE BARU UNTUK MENAMPILKAN JADWAL ---
+/**
+ * Composable helper (private) baru untuk menampilkan kartu jadwal praktik.
+ * @param schedule Daftar [DailyScheduleData] yang didapat dari ViewModel.
+ */
 @Composable
 fun ScheduleInfo(schedule: List<DailyScheduleData>) {
     Column(

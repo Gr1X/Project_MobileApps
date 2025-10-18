@@ -19,7 +19,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.project_mobileapps.data.local.DailyReport
-
+/**
+ * Composable reusable untuk menampilkan grafik batang (bar chart)
+ * data laporan pasien (misal: jumlah pasien per hari).
+ *
+ * @param reportData Daftar [DailyReport] yang berisi data untuk ditampilkan.
+ * @param modifier Modifier untuk [Card] container.
+ */
 @Composable
 fun PatientStatsChart(
     reportData: List<DailyReport>,
@@ -69,7 +75,14 @@ fun PatientStatsChart(
         }
     }
 }
-
+/**
+ * Composable helper (private) untuk menggambar satu item bar (angka, bar, label).
+ * Digunakan di dalam [RowScope] dari [PatientStatsChart].
+ *
+ * @param value Nilai (jumlah pasien) untuk bar ini.
+ * @param maxValue Nilai maksimum dari semua data (untuk skala tinggi).
+ * @param label Teks label di bawah bar (misal: "Sen").
+ */
 @Composable
 private fun RowScope.BarItem(value: Int, maxValue: Float, label: String) {
     val isYearlyView = label.length > 3 // Asumsi label tahun (misal: "2024") lebih dari 3 karakter

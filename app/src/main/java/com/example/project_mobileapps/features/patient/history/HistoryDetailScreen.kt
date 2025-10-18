@@ -14,7 +14,18 @@ import androidx.compose.ui.unit.dp
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.ui.components.CircularBackButton
 import com.example.project_mobileapps.ui.themes.TextSecondary
-
+/**
+ * Composable untuk layar Detail Riwayat Kunjungan.
+ * Ini adalah layar "dumb" (stateless) yang hanya menerima data sebagai parameter
+ * dan menampilkannya. Data ini diteruskan dari [HistoryScreen] melalui navigasi.
+ *
+ * @param visitId ID unik kunjungan (saat ini tidak ditampilkan, tapi bagus untuk dimiliki).
+ * @param visitDate String tanggal kunjungan.
+ * @param doctorName Nama dokter yang menangani.
+ * @param complaint Keluhan awal yang dicatat.
+ * @param status Status akhir kunjungan (misal: SELESAI, DIBATALKAN).
+ * @param onNavigateBack Callback untuk kembali ke layar sebelumnya.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryDetailScreen(
@@ -63,7 +74,11 @@ fun HistoryDetailScreen(
         }
     }
 }
-
+/**
+ * Composable helper (private) untuk menampilkan satu baris detail (Label + Value).
+ * @param label Teks label di bagian atas (misal: "Dokter").
+ * @param value Teks nilai di bagian bawah (misal: "Dr. Budi Santoso").
+ */
 @Composable
 private fun DetailRow(label: String, value: String) {
     Column {
@@ -72,7 +87,10 @@ private fun DetailRow(label: String, value: String) {
         Text(text = value, style = MaterialTheme.typography.bodyLarge)
     }
 }
-
+/**
+ * Composable helper (private) untuk menampilkan kartu status di bagian bawah.
+ * @param status Enum [QueueStatus] untuk menentukan teks dan warna.
+ */
 @Composable
 private fun StatusCard(status: QueueStatus) {
     val (statusText, statusColor, statusTextColor) = when (status) {

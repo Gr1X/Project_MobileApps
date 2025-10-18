@@ -23,7 +23,16 @@ import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.di.AppContainer
 import com.example.project_mobileapps.ui.components.CircularBackButton
 import com.example.project_mobileapps.ui.themes.TextSecondary
-
+/**
+ * Composable untuk layar Riwayat Kunjungan.
+ * Menampilkan daftar [HistoryItem] dalam [LazyColumn].
+ * Mengelola state loading dan state kosong.
+ *
+ * @param onNavigateBack Callback untuk kembali ke layar sebelumnya.
+ * @param onHistoryClick Callback yang dipanggil saat sebuah item riwayat diklik,
+ * membawa data [HistoryItem] yang diklik.
+ * @param viewModel ViewModel [HistoryViewModel] yang menyediakan data riwayat.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
@@ -72,7 +81,11 @@ fun HistoryScreen(
         }
     }
 }
-
+/**
+ * Composable helper (private) untuk menampilkan satu kartu item riwayat.
+ * @param item Data [HistoryItem] yang akan ditampilkan.
+ * @param onClick Callback yang akan dipanggil saat kartu ini diklik.
+ */
 @Composable
 private fun HistoryItemCard(
     item: HistoryItem,
@@ -115,7 +128,10 @@ private fun HistoryItemCard(
         }
     }
 }
-
+/**
+ * Composable helper (private) untuk menampilkan blok tanggal yang diformat.
+ * @param dateString String tanggal lengkap (misal: "18 Oktober 2025").
+ */
 @Composable
 private fun DateBlock(dateString: String) {
     var day = ""

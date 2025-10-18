@@ -13,6 +13,24 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 // State baru untuk mengelola semua state form dan error
+/**
+ * Model data (UI State) yang merepresentasikan semua state untuk layar Auth (Login dan Register).
+ * Menggunakan satu data class ini memudahkan pengelolaan state secara keseluruhan.
+ *
+ * @property isLoading Menandakan apakah ada proses (login/register) yang sedang berjalan.
+ * @property error Menyimpan pesan error global (misal: "Email sudah terdaftar").
+ * @property loggedInUser Menyimpan data [User] jika login/register berhasil, null jika tidak.
+ * @property loginEmail Teks input untuk email login.
+ * @property loginPassword Teks input untuk password login.
+ * @property loginEmailError Pesan error spesifik untuk input email login.
+ * @property loginPasswordError Pesan error spesifik untuk input password login.
+ * @property registerName Teks input untuk nama register.
+ * @property registerEmail Teks input untuk email register.
+ * @property registerPassword Teks input untuk password register.
+ * @property registerNameError Pesan error spesifik untuk input nama register.
+ * @property registerEmailError Pesan error spesifik untuk input email register.
+ * @property registerPasswordError Pesan error spesifik untuk input password register.
+ */
 data class AuthState(
     val isLoading: Boolean = false,
     val error: String? = null,
@@ -28,10 +46,20 @@ data class AuthState(
     val registerEmailError: String? = null,
     val registerPasswordError: String? = null
 )
-
+/**
+ * ViewModel untuk [AuthScreen].
+ * Bertanggung jawab atas logika bisnis, validasi input, dan komunikasi
+ * dengan [AuthRepository] untuk proses login dan registrasi.
+ *
+ * @param authRepository Repository yang menangani logika autentikasi (dummy).
+ */
 class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
 
     private val _authState = MutableStateFlow(AuthState())
+    /**
+     * StateFlow publik (read-only) yang diekspos ke UI [AuthScreen].
+     * UI akan mengamati (observe) perubahan pada state ini.
+     */
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
     // Fungsi untuk menghandle perubahan input dari UI
@@ -52,6 +80,10 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
     }
 
     // Fungsi utama dengan logika validasi
+    /**
+     * Menjalankan proses registrasi pengguna.
+     * Melakukan validasi input terlebih dahulu.
+     */
     fun registerUser() {
         val state = _authState.value
         val name = state.registerName.trim()
@@ -86,7 +118,12 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
             )
         }
     }
-
+    /**
+     * Menjalankan proses login pengguna.
+     * Melakukan validasi input terlebih dahulu.
+     * @param email (Opsional) Digunakan untuk auto-login setelah register.
+     * @param pass (Opsional) Digunakan untuk auto-login setelah register.
+     */
     fun loginUser(
         email: String = _authState.value.loginEmail,
         pass: String = _authState.value.loginPassword
@@ -113,9 +150,18 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
             )
         }
     }
-
+    /**
+     * Mereset seluruh AuthState ke kondisi awal.
+     * Dipanggil saat berganti tab antara Login dan Register.
+     */
     fun resetAuthState() { _authState.value = AuthState() }
 }
+/**
+ * Factory untuk [AuthViewModel].
+ * Ini diperlukan karena ViewModel memiliki dependensi ([AuthRepository])
+ * yang perlu di-pass saat pembuatan.
+ * Menggunakan [AuthRepository] (singleton object) secara langsung.
+ */
 class AuthViewModelFactory : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(AuthViewModel::class.java)) {
