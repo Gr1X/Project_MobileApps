@@ -2,9 +2,18 @@ package com.example.project_mobileapps.data.local
 
 import com.example.project_mobileapps.data.model.HistoryItem
 import com.example.project_mobileapps.data.model.QueueStatus
-
+/**
+ * Singleton object yang menyediakan data riwayat kunjungan (history) palsu.
+ * Berguna untuk pengembangan UI dan pengujian fitur yang menampilkan daftar riwayat
+ * kunjungan pasien, khususnya untuk 'pasien01'.
+ */
 object DummyHistoryDatabase {
     // --- PERUBAHAN DI SINI: Gunakan mutableListOf agar bisa diubah ---
+    /**
+     * Daftar (list) yang dapat diubah (mutable) yang menyimpan item riwayat kunjungan.
+     * Dibuat mutable untuk memungkinkan simulasi penambahan riwayat baru saat
+     * antrian pasien selesai.
+     */
     val history = mutableListOf(
         HistoryItem(
             visitId = "hist001",
