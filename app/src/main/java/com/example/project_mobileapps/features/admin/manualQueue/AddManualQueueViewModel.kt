@@ -12,6 +12,23 @@ import com.example.project_mobileapps.data.repo.QueueRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+/**
+ * Merepresentasikan state UI untuk layar [AddManualQueueScreen].
+ * Menggabungkan state untuk pencarian, hasil pencarian, form pendaftaran, dan validasi error.
+ *
+ * @property searchQuery Teks yang sedang diketik pengguna di kolom pencarian.
+ * @property searchResults Daftar pengguna ([User]) yang cocok dengan [searchQuery].
+ * @property isSearching True jika proses pencarian sedang berlangsung.
+ * @property selectedUser Pengguna yang dipilih dari [searchResults]. Jika non-null, UI akan menampilkan info pasien ini.
+ * @property newPatientName State untuk input nama pada form pasien baru.
+ * @property newPatientEmail State untuk input email pada form pasien baru.
+ * @property newPatientPhone State untuk input nomor telepon pada form pasien baru.
+ * @property newPatientGender State untuk input jenis kelamin pada form pasien baru.
+ * @property newPatientDob State untuk input tanggal lahir pada form pasien baru.
+ * @property nameError Pesan error validasi untuk nama.
+ * @property emailError Pesan error validasi untuk email.
+ * @property phoneError Pesan error validasi untuk nomor telepon.
+ */
 data class AddManualQueueUiState(
     val searchQuery: String = "",
     val searchResults: List<User> = emptyList(),
@@ -29,6 +46,13 @@ data class AddManualQueueUiState(
     val phoneError: String? = null
 )
 
+/**
+ * ViewModel untuk [AddManualQueueScreen]. Mengelola logika untuk mencari pasien yang sudah ada
+ * atau mendaftarkan pasien baru, kemudian menambahkan mereka ke antrian.
+ *
+ * @param authRepository Repository untuk otentikasi, pencarian, dan pendaftaran pengguna.
+ * @param queueRepository Repository untuk menambahkan entri antrian baru.
+ */
 class AddManualQueueViewModel(
     private val authRepository: AuthRepository,
     private val queueRepository: QueueRepository
@@ -54,6 +78,13 @@ class AddManualQueueViewModel(
     fun onNewPatientDobChange(dob: String) {
         _uiState.update { it.copy(newPatientDob = dob) }
     }
+
+    /**
+     * Dipanggil setiap kali teks di kolom pencarian berubah.
+     * Memulai proses pencarian pengguna secara asynchronous.
+     *
+     * @param query Teks pencarian baru.
+     */
     fun onSearchQueryChange(query: String) {
         _uiState.update { it.copy(searchQuery = query, isSearching = true, selectedUser = null) }
         if (query.isBlank()) {
@@ -65,13 +96,30 @@ class AddManualQueueViewModel(
             _uiState.update { it.copy(searchResults = results, isSearching = false) }
         }
     }
+    /**
+     * Dipanggil ketika admin memilih seorang pengguna dari hasil pencarian.
+     * Mengunci UI pada info pasien yang dipilih.
+     *
+     * @param user Pengguna yang dipilih.
+     */
     fun onUserSelected(user: User) {
         _uiState.update { it.copy(selectedUser = user, searchQuery = user.name, searchResults = emptyList()) }
     }
+
+    /**
+     * Membersihkan semua state dan mengembalikan UI ke kondisi awal.
+     * Dipanggil saat admin membatalkan pilihan pasien.
+     */
     fun clearSelection() {
         _uiState.update { AddManualQueueUiState() }
     }
 
+    /**
+     * Menambahkan antrian untuk pengguna yang sudah dipilih.
+     *
+     * @param complaint Keluhan awal pasien.
+     * @param onResult Callback untuk memberitahu UI hasil dari operasi (sukses/gagal).
+     */
     fun addQueueForSelectedUser(complaint: String, onResult: (Result<QueueItem>) -> Unit) {
         viewModelScope.launch {
             val user = _uiState.value.selectedUser ?: return@launch
@@ -80,6 +128,12 @@ class AddManualQueueViewModel(
         }
     }
 
+    /**
+     * Melakukan validasi, mendaftarkan pasien baru, dan kemudian menambahkannya ke antrian.
+     *
+     * @param complaint Keluhan awal pasien.
+     * @param onResult Callback untuk memberitahu UI hasil dari operasi (sukses/gagal).
+     */
     fun registerNewPatientAndAddQueue(complaint: String, onResult: (Result<QueueItem>) -> Unit) {
         viewModelScope.launch {
             val state = _uiState.value
@@ -115,7 +169,10 @@ class AddManualQueueViewModel(
     }
 }
 
-// Factory perlu diubah untuk AuthRepository
+/**
+ * Factory untuk membuat instance [AddManualQueueViewModel].
+ * Diperlukan karena ViewModel memiliki dependensi ganda.
+ */
 class AddManualQueueViewModelFactory(
     private val authRepository: AuthRepository,
     private val queueRepository: QueueRepository

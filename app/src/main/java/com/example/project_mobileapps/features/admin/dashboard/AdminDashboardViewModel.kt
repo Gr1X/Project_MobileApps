@@ -13,7 +13,18 @@ import com.example.project_mobileapps.data.repo.QueueRepository
 import kotlinx.coroutines.flow.*
 import java.util.Calendar
 
-// UI State yang sudah disederhanakan (tanpa data laporan)
+/**
+ * Merepresentasikan state UI untuk layar Dashboard Admin.
+ * Berisi semua data yang telah diproses dan siap untuk ditampilkan di Composable.
+ *
+ * @property practiceStatus Status praktik dokter saat ini (buka/tutup, nomor dilayani, dll).
+ * @property isLoading True jika data sedang dimuat, false jika sudah siap.
+ * @property totalPatientsToday Jumlah total pasien yang mendaftar pada hari ini.
+ * @property patientsWaiting Jumlah pasien yang sedang menunggu atau telah dipanggil.
+ * @property patientsFinished Jumlah pasien yang telah selesai dilayani hari ini.
+ * @property top5ActiveQueue Daftar 5 pasien teratas yang masih aktif dalam antrian (menunggu, dipanggil, dilayani).
+ * @property doctorScheduleToday Jadwal praktik dokter untuk hari ini.
+ */
 data class AdminDashboardUiState(
     val practiceStatus: PracticeStatus? = null,
     val isLoading: Boolean = true,
@@ -24,9 +35,19 @@ data class AdminDashboardUiState(
     val doctorScheduleToday: DailyScheduleData? = null
 )
 
+/**
+ * ViewModel yang bertanggung jawab atas logika bisnis dan pengelolaan state untuk [AdminDashboardScreen].
+ *
+ * @property queueRepository Repository yang menyediakan data antrian dan status praktik.
+ */
 class AdminDashboardViewModel(private val queueRepository: QueueRepository) : ViewModel() {
 
-    // Hanya combine data yang dibutuhkan, tanpa filter laporan
+    /**
+     * StateFlow yang memancarkan [AdminDashboardUiState] terbaru ke UI.
+     * Menggunakan `combine` untuk secara reaktif mengolah data dari `dailyQueuesFlow` dan `practiceStatusFlow`.
+     * Setiap kali ada perubahan pada salah satu flow sumber, blok `combine` akan dieksekusi ulang
+     * untuk menghasilkan state UI yang baru dan akurat.
+     */
     val uiState: StateFlow<AdminDashboardUiState> = combine(
         queueRepository.dailyQueuesFlow,
         queueRepository.practiceStatusFlow
@@ -34,8 +55,10 @@ class AdminDashboardViewModel(private val queueRepository: QueueRepository) : Vi
 
         val today = Calendar.getInstance()
         val isSameDay = { d1: Calendar, d2: Calendar -> d1.get(Calendar.YEAR) == d2.get(Calendar.YEAR) && d1.get(Calendar.DAY_OF_YEAR) == d2.get(Calendar.DAY_OF_YEAR) }
+        // Filter untuk hanya mengambil antrian yang dibuat pada hari ini.
         val queuesToday = queues.filter { val qd = Calendar.getInstance().apply { time = it.createdAt }; isSameDay(today, qd) }
 
+        // Mengambil status dan jadwal praktik untuk dokter yang relevan.
         val practiceStatus = statuses["doc_123"]
         val weeklySchedule = queueRepository.getDoctorSchedule("doc_123")
         val dayOfWeekInt = today.get(Calendar.DAY_OF_WEEK)
@@ -43,11 +66,13 @@ class AdminDashboardViewModel(private val queueRepository: QueueRepository) : Vi
         val currentDayString = dayMapping[dayOfWeekInt - 1]
         val todaySchedule = weeklySchedule.find { it.dayOfWeek.equals(currentDayString, ignoreCase = true) }
 
+        // Mengambil 5 antrian aktif teratas untuk ditampilkan di dashboard.
         val activeQueues = queuesToday
             .filter { it.status in listOf(QueueStatus.DILAYANI, QueueStatus.DIPANGGIL, QueueStatus.MENUNGGU) }
             .sortedBy { it.queueNumber }
             .take(5)
 
+        // Membuat objek state UI yang baru dengan data yang sudah diproses.
         AdminDashboardUiState(
             isLoading = false,
             practiceStatus = practiceStatus,
@@ -58,12 +83,17 @@ class AdminDashboardViewModel(private val queueRepository: QueueRepository) : Vi
             top5ActiveQueue = activeQueues
         )
     }.stateIn(
+        // Mengubah cold Flow menjadi hot StateFlow yang efisien untuk dibagikan ke UI.
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = AdminDashboardUiState()
+        initialValue = AdminDashboardUiState() // State awal saat UI pertama kali berlangganan.
     )
 }
 
+/**
+ * Factory untuk membuat instance [AdminDashboardViewModel].
+ * Diperlukan karena ViewModel memiliki dependensi ([queueRepository]) yang perlu disediakan saat pembuatan.
+ */
 class AdminDashboardViewModelFactory(
     private val queueRepository: QueueRepository
 ) : ViewModelProvider.Factory {

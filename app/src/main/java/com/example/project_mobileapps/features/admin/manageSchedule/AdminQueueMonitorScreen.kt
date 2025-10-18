@@ -41,7 +41,11 @@ import kotlinx.coroutines.delay
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
-
+/**
+ * Sealed class untuk merepresentasikan berbagai jenis aksi konfirmasi yang dapat
+ * memicu munculnya Bottom Sheet. Menggunakan sealed class membuat penanganan
+ * setiap jenis aksi menjadi lebih aman (type-safe) dan terstruktur dalam `when` expression.
+ */
 sealed class ConfirmationAction {
     data class Finish(val patient: PatientQueueDetails) : ConfirmationAction()
     data class Arrive(val patient: PatientQueueDetails) : ConfirmationAction()
@@ -49,6 +53,13 @@ sealed class ConfirmationAction {
     data class Cancel(val patient: PatientQueueDetails) : ConfirmationAction()
 }
 
+/**
+ * Composable utama untuk layar pemantauan antrian.
+ * Layar ini digunakan oleh Admin dan Dokter untuk melihat dan mengelola alur pasien secara real-time.
+ *
+ * @param viewModel ViewModel [AdminQueueMonitorViewModel] yang menyediakan state dan logika untuk layar ini.
+ * @param currentUserRole Peran pengguna yang sedang login, digunakan untuk menampilkan/menyembunyikan aksi tertentu (misal: hanya dokter yang bisa menyelesaikan konsultasi).
+ */
 @Composable
 fun AdminQueueMonitorScreen(
     viewModel: AdminQueueMonitorViewModel, // <-- Tipe ViewModel diubah
@@ -56,10 +67,13 @@ fun AdminQueueMonitorScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+
+    // State untuk mengelola dialog dan bottom sheet.
     var patientToCancel by remember { mutableStateOf<PatientQueueDetails?>(null) }
     var activeConfirmation by remember { mutableStateOf<ConfirmationAction?>(null) }
     var patientToView by remember { mutableStateOf<PatientQueueDetails?>(null) }
 
+    // Menampilkan ConfirmationBottomSheet secara kondisional berdasarkan state `activeConfirmation`.
     activeConfirmation?.let { action ->
         when (action) {
             is ConfirmationAction.Cancel -> {
@@ -109,6 +123,7 @@ fun AdminQueueMonitorScreen(
         }
     }
 
+    // Menampilkan BottomSheet detail pasien jika `patientToView` tidak null.
     if (patientToView != null) {
         PatientDetailBottomSheet(
             patientDetails = patientToView!!,
@@ -120,6 +135,7 @@ fun AdminQueueMonitorScreen(
         )
     }
 
+    // (Legacy Dialog - bisa dihapus jika tidak digunakan lagi, karena sudah digantikan BottomSheet)
     if (patientToCancel != null) {
         ConfirmationDialog(
             onDismiss = { patientToCancel = null },
@@ -132,6 +148,7 @@ fun AdminQueueMonitorScreen(
         )
     }
 
+    // Layout utama layar menggunakan LazyColumn untuk efisiensi.
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -155,6 +172,7 @@ fun AdminQueueMonitorScreen(
             }
         }
 
+        // Menampilkan daftar antrian atau pesan jika kosong.
         if (uiState.isLoading) {
             item { CircularProgressIndicator(modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally)) }
         } else if (uiState.fullQueueList.isEmpty()) {
@@ -174,6 +192,9 @@ fun AdminQueueMonitorScreen(
     }
 }
 
+/**
+ * Menampilkan 3 statistik utama di bagian atas layar: Sedang Dilayani, Total Antrian, dan Antrian Berikutnya.
+ */
 @Composable
 fun TopStatsSection(uiState: DoctorQueueUiState) {
     Row(
@@ -189,6 +210,9 @@ fun TopStatsSection(uiState: DoctorQueueUiState) {
     }
 }
 
+/**
+ * Kartu kecil yang dapat digunakan kembali untuk menampilkan satu metrik statistik.
+ */
 @Composable
 fun SmallStatCard(label: String, value: String, icon: ImageVector, modifier: Modifier = Modifier) {
     Card(modifier = modifier) {
@@ -204,13 +228,23 @@ fun SmallStatCard(label: String, value: String, icon: ImageVector, modifier: Mod
     }
 }
 
+/**
+ * Bagian UI yang paling dinamis, menampilkan kartu aksi utama yang berubah-ubah
+ * sesuai dengan kondisi antrian saat ini.
+ *
+ * @param uiState State UI saat ini dari ViewModel.
+ * @param onAction Callback untuk memicu aksi konfirmasi (misal: memanggil, konfirmasi hadir).
+ * @param currentUserRole Peran pengguna yang login.
+ */
 @Composable
 fun MainActionSection(
     uiState: DoctorQueueUiState,
     onAction: (ConfirmationAction) -> Unit,
     currentUserRole: Role?
 ) {
+    // Logika kondisional untuk menentukan kartu aksi mana yang harus ditampilkan.
     when {
+        // KONDISI 1: Ada pasien yang sedang dilayani. Tampilkan timer konsultasi.
         uiState.currentlyServing != null -> {
             PatientActionProfileCard(
                 title = "Sedang Melayani",
@@ -218,6 +252,7 @@ fun MainActionSection(
                 actionContent = {
                     var consultationTime by remember { mutableStateOf("00:00") }
 
+                    // LaunchedEffect untuk menjalankan timer stopwatch.
                     LaunchedEffect(uiState.currentlyServing.queueItem.startedAt) {
                         while (true) {
                             val diff = Date().time - (uiState.currentlyServing.queueItem.startedAt?.time ?: 0)
@@ -231,6 +266,7 @@ fun MainActionSection(
                     Text(consultationTime, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    // Tombol "Selesai" hanya muncul untuk Dokter.
                     if (currentUserRole == Role.DOKTER) {
                         Button(
                             onClick = { onAction(ConfirmationAction.Finish(uiState.currentlyServing)) },
@@ -242,14 +278,16 @@ fun MainActionSection(
                 }
             )
         }
-        // KONDISI 2: Sudah memanggil, menunggu pasien datang
+
+        // KONDISI 2: Pasien sudah dipanggil, menunggu kedatangan. Tampilkan timer countdown.
         uiState.patientCalled != null -> {
             PatientActionProfileCard(
                 title = "Telah Dipanggil",
                 patientDetails = uiState.patientCalled,
                 actionContent = {
                     var timeRemaining by remember { mutableStateOf("01:00") }
-                    // LaunchedEffect ini sudah benar, tidak perlu diubah
+
+                    // LaunchedEffect untuk menjalankan timer countdown.
                     LaunchedEffect(uiState.patientCalled.queueItem.calledAt) {
                         val deadline = (uiState.patientCalled.queueItem.calledAt?.time ?: 0) + (1 * 60 * 1000)
                         while (true) {
@@ -269,7 +307,6 @@ fun MainActionSection(
                     Text(timeRemaining, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // ✅ PERBAIKAN DI SINI
                     Button(
                         onClick = { onAction(ConfirmationAction.Arrive(uiState.patientCalled)) }, // Gunakan onAction
                         modifier = Modifier.fillMaxWidth()
@@ -279,13 +316,13 @@ fun MainActionSection(
                 }
             )
         }
-        // KONDISI 3: Siap memanggil pasien berikutnya
+
+        // KONDISI 3: Siap memanggil pasien berikutnya. Tampilkan info pasien berikutnya dan tombol panggil.
         uiState.nextInLine != null -> {
             PatientActionProfileCard(
                 title = "Pasien Berikutnya",
                 patientDetails = uiState.nextInLine,
                 actionContent = {
-                    // ✅ PERBAIKAN DI SINI
                     Button(
                         onClick = { onAction(ConfirmationAction.CallNext) }, // Gunakan onAction
                         modifier = Modifier.fillMaxWidth().height(50.dp)
@@ -295,7 +332,8 @@ fun MainActionSection(
                 }
             )
         }
-        // KONDISI 4: Tidak ada antrian sama sekali
+
+        // KONDISI 4: Tidak ada antrian sama sekali. Tampilkan pesan.
         else -> {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Text(
@@ -308,6 +346,9 @@ fun MainActionSection(
     }
 }
 
+/**
+ * Kartu reusable yang menampilkan profil pasien beserta slot untuk konten aksi (misal: tombol, timer).
+ */
 @Composable
 fun PatientActionProfileCard(
     title: String,
@@ -349,15 +390,18 @@ fun PatientActionProfileCard(
     }
 }
 
+/**
+ * Menampilkan satu baris data pasien dalam daftar antrian.
+ */
 @Composable
 fun PatientQueueRow(
     patientDetails: PatientQueueDetails,
-    onClick: () -> Unit // Hanya butuh satu aksi klik
+    onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick) // Seluruh kartu bisa diklik
+            .clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier
@@ -378,12 +422,13 @@ fun PatientQueueRow(
                 )
             }
             StatusChip(status = patientDetails.queueItem.status)
-            // Tombol hapus sudah tidak ada di sini
         }
     }
 }
 
-
+/**
+ * Chip yang dapat digunakan kembali untuk menampilkan status antrian dengan warna yang sesuai.
+ */
 @Composable
 fun StatusChip(status: QueueStatus) {
     val (text, color) = when (status) {
@@ -403,7 +448,9 @@ fun StatusChip(status: QueueStatus) {
     )
 }
 
-
+/**
+ * Tombol dropdown yang dapat digunakan kembali untuk memfilter daftar antrian berdasarkan status.
+ */
 @Composable
 fun FilterDropdownButton(
     options: List<QueueStatus>,
@@ -450,7 +497,9 @@ fun FilterDropdownButton(
     }
 }
 
-
+/**
+ * Bottom sheet yang menampilkan detail lengkap seorang pasien.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PatientDetailBottomSheet(
@@ -505,35 +554,6 @@ fun PatientDetailBottomSheet(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Batalkan Antrian")
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ServiceTimeSelector(
-    currentTime: Int,
-    onTimeChange: (Int) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column {
-            Text("Estimasi Waktu Layanan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("Per Pasien", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            IconButton(onClick = { onTimeChange(-1) }, enabled = currentTime > 5) {
-                Icon(Icons.Default.Remove, "Kurangi")
-            }
-            Text("$currentTime min", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            IconButton(onClick = { onTimeChange(1) }, enabled = currentTime < 60) {
-                Icon(Icons.Default.Add, "Tambah")
             }
         }
     }

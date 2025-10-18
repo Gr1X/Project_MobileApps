@@ -20,6 +20,14 @@ import androidx.compose.ui.unit.dp
 import com.example.project_mobileapps.data.model.User
 import com.example.project_mobileapps.ui.components.PatientStatsChart
 
+/**
+ * Composable utama untuk layar Laporan & Analitik.
+ * Menampilkan ringkasan metrik kinerja, grafik data pasien, dan daftar pasien unik
+ * dalam periode waktu yang dapat dipilih.
+ *
+ * @param viewModel ViewModel [ReportViewModel] yang menyediakan state dan logika untuk layar ini.
+ * @param onPatientClick Callback yang dipanggil saat item pasien di-klik, membawa ID pasien untuk navigasi ke detail.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportScreen(
@@ -38,10 +46,12 @@ fun ReportScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp) // Jarak konsisten antar item utama
         ) {
+            // Judul Halaman
             item {
                 Text("Laporan & Analitik", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             }
 
+            // Bagian Filter Periode
             item {
                 FilterSection(
                     uiState = uiState,
@@ -51,6 +61,7 @@ fun ReportScreen(
                 )
             }
 
+            // Bagian Kartu KPI (Key Performance Indicator)
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -64,10 +75,12 @@ fun ReportScreen(
                 }
             }
 
+            // Bagian Grafik Statistik Pasien
             item {
                 PatientStatsChart(reportData = uiState.chartData)
             }
 
+            // Bagian Daftar Riwayat Pasien
             item {
                 Text("Riwayat Pasien di Periode Ini", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
@@ -83,6 +96,15 @@ fun ReportScreen(
     }
 }
 
+/**
+ * Composable yang berisi semua kontrol filter (Dropdown) untuk memilih periode laporan.
+ * Menampilkan filter tahun dan bulan secara kondisional berdasarkan periode yang dipilih.
+ *
+ * @param uiState State UI saat ini, digunakan untuk mendapatkan nilai filter yang aktif dan opsi yang tersedia.
+ * @param onPeriodSelect Callback saat periode utama (Harian, Mingguan, dll.) dipilih.
+ * @param onYearSelect Callback saat tahun dipilih.
+ * @param onMonthSelect Callback saat bulan dipilih.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FilterSection(
@@ -127,6 +149,7 @@ private fun FilterSection(
 
         // Filter Sekunder (Dropdown Tahun & Bulan)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Filter Tahun hanya muncul untuk periode Mingguan dan Bulanan.
             if (uiState.selectedPeriod == ReportPeriod.MINGGUAN || uiState.selectedPeriod == ReportPeriod.BULANAN) {
                 ExposedDropdownMenuBox(
                     expanded = yearExpanded,
@@ -149,6 +172,7 @@ private fun FilterSection(
                 }
             }
 
+            // Filter Bulan hanya muncul untuk periode Mingguan.
             if (uiState.selectedPeriod == ReportPeriod.MINGGUAN) {
                 ExposedDropdownMenuBox(
                     expanded = monthExpanded,
@@ -174,6 +198,14 @@ private fun FilterSection(
     }
 }
 
+/**
+ * Kartu reusable untuk menampilkan satu Key Performance Indicator (KPI).
+ *
+ * @param title Judul atau deskripsi dari KPI (misal: "Total Pasien Selesai").
+ * @param value Nilai dari KPI yang akan ditampilkan.
+ * @param icon Ikon yang merepresentasikan KPI.
+ * @param modifier Modifier untuk kartu.
+ */
 @Composable
 private fun KpiCard(title: String, value: String, icon: ImageVector, modifier: Modifier = Modifier) {
     Card(
@@ -184,7 +216,7 @@ private fun KpiCard(title: String, value: String, icon: ImageVector, modifier: M
     ) {
         // PERBAIKAN: Tambahkan .fillMaxSize() agar Column mengisi seluruh kartu
         Column(
-            modifier = Modifier.padding(16.dp).fillMaxSize(),
+            modifier = Modifier.padding(16.dp).fillMaxSize(), // `fillMaxSize` penting agar `SpaceBetween` berfungsi.
             horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.SpaceBetween // Gunakan SpaceBetween agar ikon di atas dan teks di bawah
         ) {
@@ -207,6 +239,13 @@ private fun KpiCard(title: String, value: String, icon: ImageVector, modifier: M
     }
 }
 
+/**
+ * Menampilkan satu item pasien dalam daftar di bagian bawah laporan.
+ * Item ini bisa diklik untuk melihat detail riwayat pasien tersebut.
+ *
+ * @param patient Objek [User] dari pasien yang akan ditampilkan.
+ * @param onClick Callback yang dipanggil saat item di-klik.
+ */
 @Composable
 private fun PatientReportListItem(patient: User, onClick: () -> Unit) {
     Card(

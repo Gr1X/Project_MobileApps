@@ -15,12 +15,20 @@ import com.example.project_mobileapps.core.navigation.AdminMenu
 import com.example.project_mobileapps.core.navigation.AdminNavGroup
 import com.example.project_mobileapps.core.navigation.AdminNavItem
 
+/**
+ * Composable yang membangun konten UI untuk Navigation Drawer (menu samping) Admin.
+ *
+ * @param currentRoute Rute dari layar yang sedang aktif, digunakan untuk menyorot item menu yang sesuai.
+ * @param onNavigate Callback yang dipanggil ketika item navigasi di-klik, membawa rute tujuan.
+ * @param onLogoutClick Callback yang dipanggil ketika tombol logout di-klik.
+ */
 @Composable
 fun AdminDrawerContent(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
     onLogoutClick: () -> Unit
 ) {
+    // State untuk mengontrol visibilitas (expand/collapse) dari sub-menu "Manajemen".
     var managementExpanded by remember { mutableStateOf(false) }
 
     ModalDrawerSheet {
@@ -40,10 +48,10 @@ fun AdminDrawerContent(
         Divider()
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Logika untuk menampilkan semua item navigasi
+        // Iterasi melalui semua item navigasi yang didefinisikan di AdminMenu.
         AdminMenu.allNavItems.forEach { navItem ->
             when (navItem) {
-                // Kasus untuk item menu biasa
+                // Menggunakan 'when' untuk menangani tipe item yang berbeda (item tunggal vs grup).
                 is AdminNavItem -> {
                     NavigationDrawerItem(
                         icon = { Icon(navItem.icon, contentDescription = navItem.label) },

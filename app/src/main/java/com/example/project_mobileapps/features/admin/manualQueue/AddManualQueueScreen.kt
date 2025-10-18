@@ -27,6 +27,15 @@ import com.example.project_mobileapps.di.AppContainer
 import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
 import java.util.*
 
+/**
+ * Composable untuk layar penambahan antrian manual oleh Admin.
+ * Layar ini memiliki dua mode utama:
+ * 1. Mencari dan memilih pasien yang sudah terdaftar.
+ * 2. Mendaftarkan pasien baru jika tidak ditemukan dalam pencarian.
+ *
+ * @param onNavigateBack Callback untuk kembali ke layar sebelumnya.
+ * @param viewModel ViewModel [AddManualQueueViewModel] yang mengelola state dan logika layar ini.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddManualQueueScreen(
@@ -40,9 +49,13 @@ fun AddManualQueueScreen(
     val context = LocalContext.current
     var showConfirmationSheet by remember { mutableStateOf(false) }
 
+    // Logika untuk menentukan mode UI saat ini.
+    // Mode "Pasien Baru" aktif jika user sudah mengetik query, tidak ada hasil, dan proses pencarian sudah selesai.
     val isNewPatientMode = uiState.selectedUser == null && uiState.searchQuery.isNotBlank() && uiState.searchResults.isEmpty() && !uiState.isSearching
+    // Mode "Pasien Dipilih" aktif jika user sudah memilih pasien dari hasil pencarian.
     val isPatientSelected = uiState.selectedUser != null
 
+    // Tombol utama diaktifkan hanya jika pasien sudah dipilih (atau dalam mode baru) DAN keluhan sudah diisi.
     val isButtonEnabled = (isPatientSelected && complaint.isNotBlank()) || (isNewPatientMode && complaint.isNotBlank())
 
     if (showConfirmationSheet) {
@@ -50,6 +63,7 @@ fun AddManualQueueScreen(
             onDismiss = { showConfirmationSheet = false },
             onConfirm = {
                 showConfirmationSheet = false
+                // Callback generik untuk menangani hasil dari ViewModel.
                 val onResultCallback: (Result<*>) -> Unit = { result ->
                     if (result.isSuccess) {
                         Toast.makeText(context, "Pasien berhasil ditambahkan!", Toast.LENGTH_SHORT).show()
@@ -78,6 +92,7 @@ fun AddManualQueueScreen(
             )
         },
         bottomBar = {
+            // Bottom bar untuk tombol aksi utama agar selalu terlihat.
             BottomAppBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 8.dp) {
                 Button(
                     onClick = { showConfirmationSheet = true },
@@ -94,6 +109,7 @@ fun AddManualQueueScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
+            // Kartu untuk input data pasien.
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -105,13 +121,15 @@ fun AddManualQueueScreen(
                             modifier = Modifier.fillMaxWidth(),
                             leadingIcon = { Icon(Icons.Outlined.Search, "Cari") },
                             singleLine = true,
-                            enabled = !isPatientSelected,
+                            enabled = !isPatientSelected, // Nonaktifkan search bar jika pasien sudah dipilih.
                             trailingIcon = { if(isPatientSelected) { IconButton(onClick = viewModel::clearSelection) { Icon(Icons.Outlined.Clear, "Hapus Pilihan") } } }
                         )
+                        // Menampilkan form/hasil pencarian secara dinamis dengan animasi.
                         AnimatedVisibility(visible = !isPatientSelected && uiState.searchQuery.isNotBlank()) {
                             if (isNewPatientMode) NewPatientForm(uiState = uiState, viewModel = viewModel)
                             else SearchResults(results = uiState.searchResults, onUserClick = viewModel::onUserSelected)
                         }
+                        // Menampilkan info pasien yang dipilih.
                         AnimatedVisibility(visible = isPatientSelected) {
                             uiState.selectedUser?.let { SelectedPatientInfo(user = it) }
                         }
@@ -119,6 +137,7 @@ fun AddManualQueueScreen(
                 }
             }
 
+            // Kartu untuk input keluhan.
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -136,7 +155,9 @@ fun AddManualQueueScreen(
     }
 }
 
-
+/**
+ * Menampilkan daftar hasil pencarian pasien.
+ */
 @Composable
 private fun SearchResults(results: List<User>, onUserClick: (User) -> Unit) {
     LazyColumn(
@@ -155,12 +176,17 @@ private fun SearchResults(results: List<User>, onUserClick: (User) -> Unit) {
     }
 }
 
+/**
+ * Menampilkan formulir pendaftaran untuk pasien baru.
+ * Muncul secara dinamis ketika hasil pencarian kosong.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NewPatientForm(uiState: AddManualQueueUiState, viewModel: AddManualQueueViewModel) {
     val context = LocalContext.current
     var isGenderMenuExpanded by remember { mutableStateOf(false) }
 
+    // Konfigurasi DatePickerDialog.
     val calendar = Calendar.getInstance()
     val datePickerDialog = DatePickerDialog(
         context,
@@ -173,6 +199,7 @@ private fun NewPatientForm(uiState: AddManualQueueUiState, viewModel: AddManualQ
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Pasien tidak ditemukan. Daftarkan sebagai pasien baru:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
+        // Input fields dengan penanganan error dari ViewModel.
         OutlinedTextField(
             value = uiState.newPatientName, onValueChange = viewModel::onNewPatientNameChange,
             label = { Text("Nama Lengkap*") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
@@ -193,12 +220,13 @@ private fun NewPatientForm(uiState: AddManualQueueUiState, viewModel: AddManualQ
             isError = uiState.phoneError != null,
             supportingText = { if (uiState.phoneError != null) Text(uiState.phoneError) }
         )
+        // Input tanggal lahir yang menampilkan dialog saat diklik.
         Box(modifier = Modifier.clickable { datePickerDialog.show() }) {
             OutlinedTextField(
                 value = uiState.newPatientDob, onValueChange = {},
                 label = { Text("Tanggal Lahir (Opsional)") }, modifier = Modifier.fillMaxWidth(),
-                enabled = false, trailingIcon = { Icon(Icons.Outlined.CalendarToday, "Pilih Tanggal") },
-                colors = OutlinedTextFieldDefaults.colors(
+                enabled = false, trailingIcon = { Icon(Icons.Outlined.CalendarToday, "Pilih Tanggal") }, // Dinonaktifkan agar hanya bisa diisi melalui dialog.
+                colors = OutlinedTextFieldDefaults.colors( // Kustomisasi warna untuk state disabled.
                     disabledTextColor = MaterialTheme.colorScheme.onSurface,
                     disabledBorderColor = MaterialTheme.colorScheme.outline,
                     disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -206,6 +234,8 @@ private fun NewPatientForm(uiState: AddManualQueueUiState, viewModel: AddManualQ
                 )
             )
         }
+
+        // Dropdown untuk memilih jenis kelamin.
         ExposedDropdownMenuBox(expanded = isGenderMenuExpanded, onExpandedChange = { isGenderMenuExpanded = !isGenderMenuExpanded }) {
             OutlinedTextField(
                 value = uiState.newPatientGender.name, onValueChange = {}, readOnly = true,
@@ -222,6 +252,9 @@ private fun NewPatientForm(uiState: AddManualQueueUiState, viewModel: AddManualQ
     }
 }
 
+/**
+ * Menampilkan informasi ringkas dari pasien yang telah dipilih dari hasil pencarian.
+ */
 @Composable
 private fun SelectedPatientInfo(user: User) {
     ListItem(

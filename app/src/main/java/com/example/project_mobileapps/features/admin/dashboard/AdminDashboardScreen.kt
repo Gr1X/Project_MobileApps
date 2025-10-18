@@ -33,28 +33,40 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * Composable yang menampilkan layar Dashboard utama untuk Admin.
+ * Layar ini memberikan ringkasan status klinik, statistik harian, dan antrian aktif.
+ *
+ * @param onNavigateToSchedule Callback untuk menavigasi ke layar manajemen jadwal.
+ * @param onNavigateToMonitoring Callback untuk menavigasi ke layar pemantauan antrian.
+ * @param onNavigateToReports Callback (saat ini tidak digunakan) untuk menavigasi ke layar laporan.
+ * @param viewModel Instance dari [AdminDashboardViewModel] yang menyediakan state untuk UI.
+ */
 @Composable
 fun AdminDashboardScreen(
     onNavigateToSchedule: () -> Unit,
     onNavigateToMonitoring: () -> Unit,
-    onNavigateToReports: () -> Unit,
+    onNavigateToReports: () -> Unit, // Parameter tetap ada untuk skalabilitas di masa depan
     viewModel: AdminDashboardViewModel = viewModel(
         factory = AdminDashboardViewModelFactory(AppContainer.queueRepository)
     )
 ) {
+    // Mengamati UiState dari ViewModel. Setiap perubahan state akan memicu recomposition.
     val uiState by viewModel.uiState.collectAsState()
 
+    // Menggunakan LazyColumn untuk efisiensi, terutama jika konten menjadi lebih panjang.
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // Header Sambutan
+        // Item 1: Header Sambutan
         item {
             Text( "Hello, Admin 👋", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Text("How are you feeling today?", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Light)
         }
 
+        // Item 2: Kartu Status Praktik
         item {
             PracticeStatusCard(
                 practiceStatus = uiState.practiceStatus,
@@ -63,7 +75,7 @@ fun AdminDashboardScreen(
             )
         }
 
-        // Statistik Harian
+        // Item 3: Statistik Harian dalam bentuk kartu-kartu kecil.
         item {
             StatsHeader(
                 total = uiState.totalPatientsToday,
@@ -72,7 +84,7 @@ fun AdminDashboardScreen(
             )
         }
 
-        // Daftar Antrian Aktif
+        // Item 4: Daftar 5 antrian aktif teratas.
         item {
             Column {
                 Text("Daftar Antrian Aktif", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -95,6 +107,14 @@ fun AdminDashboardScreen(
     }
 }
 
+
+/**
+ * Menampilkan kartu yang berisi status praktik dokter saat ini (buka/tutup) dan jadwal hari ini.
+ *
+ * @param practiceStatus Objek yang berisi data status praktik.
+ * @param schedule Objek yang berisi data jadwal untuk hari ini.
+ * @param onNavigateToSchedule Callback untuk navigasi ke layar pengaturan jadwal.
+ */
 @Composable
 fun PracticeStatusCard(
     practiceStatus: PracticeStatus?,
@@ -130,6 +150,13 @@ fun PracticeStatusCard(
     }
 }
 
+/**
+ * Container [Row] yang menata letak tiga [StatCard] secara horizontal.
+ *
+ * @param total Jumlah total pasien hari ini.
+ * @param waiting Jumlah pasien yang sedang menunggu.
+ * @param finished Jumlah pasien yang sudah selesai.
+ */
 @Composable
 fun StatsHeader(total: Int, waiting: Int, finished: Int) {
     Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -157,6 +184,15 @@ fun StatsHeader(total: Int, waiting: Int, finished: Int) {
     }
 }
 
+/**
+ * Kartu individual untuk menampilkan satu metrik statistik (misal: "Total Pasien", "25").
+ *
+ * @param label Teks deskripsi untuk statistik (misal: "Total Pasien").
+ * @param value Nilai statistik yang akan ditampilkan dalam teks besar.
+ * @param icon Ikon yang merepresentasikan statistik tersebut.
+ * @param color Warna aksen untuk ikon.
+ * @param modifier Modifier untuk kartu.
+ */
 @Composable
 fun StatCard(label: String, value: String, icon: ImageVector, color: Color, modifier: Modifier = Modifier) {
     Card(
@@ -177,30 +213,39 @@ fun StatCard(label: String, value: String, icon: ImageVector, color: Color, modi
         }
     }
 }
-// File: features/admin/dashboard/AdminDashboardScreen.kt
 
+/**
+ * Kartu yang menampilkan informasi ringkas satu pasien dalam antrian aktif.
+ * Warna kartu berubah secara dinamis berdasarkan status antrian pasien.
+ *
+ * @param item Objek [QueueItem] yang berisi data pasien dan antriannya.
+ */
 @Composable
 fun AdminPatientInfoCard(item: QueueItem) {
-    // Tentukan warna dan border berdasarkan status
+    // Tentukan warna dan border kartu berdasarkan status antrian.
     val cardColors: CardColors
     val cardBorder: BorderStroke?
 
     when (item.status) {
+        // Tentukan warna dan border kartu berdasarkan status antrian.
         QueueStatus.DILAYANI -> {
             cardColors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)
             cardBorder = null
         }
+        // Kartu berwarna kuning untuk pasien yang telah dipanggil.
         QueueStatus.DIPANGGIL -> {
             cardColors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9C4))
             cardBorder = null
         }
+
+        // Kartu putih dengan border untuk status lainnya (MENUNGGU).
         else -> { // Status MENUNGGU dan lainnya
             cardColors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             cardBorder = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
         }
     }
 
-    // Tentukan warna teks agar selalu kontras
+    // Tentukan warna teks agar selalu kontras dengan latar belakang kartu.
     val contentColor = when (item.status) {
         QueueStatus.DILAYANI -> MaterialTheme.colorScheme.onPrimary
         else -> MaterialTheme.colorScheme.onSurface
@@ -223,7 +268,7 @@ fun AdminPatientInfoCard(item: QueueItem) {
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Kolom untuk Nomor dan Nama (diberi weight agar fleksibel)
+            // Kolom untuk Nomor dan Nama (diberi weight agar fleksibel).
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "No. ${item.queueNumber}",
@@ -238,7 +283,7 @@ fun AdminPatientInfoCard(item: QueueItem) {
                 )
             }
 
-            // Teks status di luar kolom agar tidak terdorong
+            // Teks status di luar kolom agar tidak terpengaruh oleh weight.
             Text(
                 text = item.status.name,
                 fontWeight = FontWeight.Bold,

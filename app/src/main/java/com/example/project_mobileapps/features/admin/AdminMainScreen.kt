@@ -35,26 +35,41 @@ import com.example.project_mobileapps.features.admin.reports.ReportViewModel
 import com.example.project_mobileapps.features.admin.reports.ReportViewModelFactory
 import kotlinx.coroutines.launch
 
+/**
+ * Composable utama yang menjadi container untuk seluruh alur (flow) Admin.
+ * Screen ini mengatur Navigation Drawer, Top App Bar, dan NavHost untuk semua
+ * layar yang diakses oleh admin.
+ *
+ * @param onLogoutClick Callback yang dieksekusi ketika admin menekan tombol logout.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminMainScreen(
     onLogoutClick: () -> Unit
 ) {
+    // State untuk mengontrol kondisi drawer (terbuka/tertutup).
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    // Coroutine scope untuk mengontrol drawer secara asynchronous (misal: membuka dan menutup drawer).
     val scope = rememberCoroutineScope()
+    // NavController khusus untuk navigasi di dalam alur admin (nested navigation).
     val adminNavController = rememberNavController()
+    // Mengamati back stack untuk mendapatkan rute yang sedang aktif.
     val navBackStackEntry by adminNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    // Logika untuk menyembunyikan Top App Bar utama pada layar detail tertentu
+    // yang memiliki Top App Bar-nya sendiri (misal: "Tambah Antrian Manual").
     val showMainAppBar = currentRoute != "add_manual_queue" && currentRoute != "patient_history_detail/{patientId}"
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
+            // Menggunakan Composable terpisah untuk konten drawer agar kode tetap bersih.
             AdminDrawerContent(
                 currentRoute = currentRoute,
                 onNavigate = { route ->
                     adminNavController.navigate(route) {
+                        // Membersihkan back stack hingga ke tujuan awal untuk menghindari tumpukan layar.
                         popUpTo(adminNavController.graph.startDestinationId) { this@navigate.launchSingleTop = true }
                     }
                     scope.launch { drawerState.close() }
@@ -65,7 +80,7 @@ fun AdminMainScreen(
     ) {
         Scaffold(
             topBar = {
-                // --- PERUBAHAN 2: Tampilkan TopAppBar hanya jika diperlukan ---
+                // Top App Bar utama hanya ditampilkan jika `showMainAppBar` bernilai true.
                 if (showMainAppBar) {
                     TopAppBar(
                         title = {},
@@ -78,6 +93,7 @@ fun AdminMainScreen(
                 }
             },
             floatingActionButton = {
+                // Floating Action Button (FAB) untuk menambah antrian hanya muncul di layar pemantauan.
                 if (currentRoute == AdminMenu.Monitoring.route) {
                     FloatingActionButton(onClick = { adminNavController.navigate("add_manual_queue") }) {
                         Icon(Icons.Default.Add, "Tambah Antrian Manual")
@@ -85,12 +101,14 @@ fun AdminMainScreen(
                 }
             }
         ) { innerPadding ->
+            // NavHost ini mengatur navigasi *di dalam* alur admin.
             NavHost(
                 navController = adminNavController,
                 startDestination = AdminMenu.Dashboard.route,
                 // --- PERUBAHAN 3: Gunakan padding hanya jika App Bar utama tampil ---
                 modifier = if (showMainAppBar) Modifier.padding(innerPadding) else Modifier
             ) {
+                // Layar Dashboard Admin
                 composable(AdminMenu.Dashboard.route) {
                     AdminDashboardScreen(
                         onNavigateToSchedule = { adminNavController.navigate(AdminMenu.Management.items[0].route) },
@@ -99,6 +117,7 @@ fun AdminMainScreen(
                     )
                 }
 
+                // Layar Pemantauan Antrian
                 composable(AdminMenu.Monitoring.route) {
                     val user by AuthRepository.currentUser.collectAsState()
                     val userRole = user?.role
@@ -108,6 +127,7 @@ fun AdminMainScreen(
                     AdminQueueMonitorScreen(viewModel = monitorViewModel, currentUserRole = userRole)
                 }
 
+                // Layar Manajemen Jadwal
                 composable(AdminMenu.Management.items[0].route) { // "manage_schedule"
                     val practiceViewModel: ManagePracticeScheduleViewModel = viewModel(
                         factory = ManagePracticeScheduleViewModelFactory(AppContainer.queueRepository)
@@ -115,6 +135,7 @@ fun AdminMainScreen(
                     ManagePracticeScheduleScreen(viewModel = practiceViewModel)
                 }
 
+                // Layar Laporan
                 composable(AdminMenu.Management.items[1].route) { // "reports"
                     val reportViewModel: ReportViewModel = viewModel(
                         factory = ReportViewModelFactory(AppContainer.queueRepository, AuthRepository)
@@ -127,6 +148,7 @@ fun AdminMainScreen(
                     )
                 }
 
+                // Layar Detail Riwayat Pasien (diakses dari layar Laporan)
                 composable("add_manual_queue") {
                     AddManualQueueScreen(
                         onNavigateBack = { adminNavController.popBackStack() }

@@ -32,6 +32,13 @@ import androidx.compose.ui.res.painterResource
 import com.example.project_mobileapps.R
 import com.example.project_mobileapps.data.model.HistoryItem
 
+/**
+ * Composable for displaying the detailed visit history of a specific patient.
+ * This screen is typically accessed by an Admin from the main reports screen.
+ *
+ * @param viewModel The [PatientHistoryDetailViewModel] that provides the patient's data and visit history.
+ * @param onNavigateBack Callback function to navigate back to the previous screen.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PatientHistoryDetailScreen(
@@ -48,20 +55,24 @@ fun PatientHistoryDetailScreen(
             )
         }
     ) { padding ->
+        // Handle loading state
         if (uiState.isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         } else {
+            // Use LazyColumn for efficient scrolling of potentially long visit histories.
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Item 1: Patient Information Header
                 item {
                     uiState.patient?.let { PatientInfoHeader(patient = it) }
                 }
 
+                // Item 2: Section Title for Visit History
                 item {
                     Text(
                         "Daftar Kunjungan",
@@ -71,6 +82,7 @@ fun PatientHistoryDetailScreen(
                     )
                 }
 
+                // Item 3 onwards: List of Visit History Cards or an empty message.
                 if (uiState.visitHistory.isEmpty()) {
                     item { Text("Pasien ini belum memiliki riwayat kunjungan.") }
                 } else {
@@ -83,6 +95,11 @@ fun PatientHistoryDetailScreen(
     }
 }
 
+/**
+ * Displays a header card with the patient's main profile information.
+ *
+ * @param patient The [User] object containing the patient's details.
+ */
 @Composable
 private fun PatientInfoHeader(patient: User) {
     Card(
@@ -106,6 +123,7 @@ private fun PatientInfoHeader(patient: User) {
                 }
             }
             Divider()
+            // Displays key info like Gender, DOB, and Phone in a compact row.
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
                 InfoChip("Gender", patient.gender.name)
                 InfoChip("Tgl. Lahir", patient.dateOfBirth)
@@ -115,6 +133,10 @@ private fun PatientInfoHeader(patient: User) {
     }
 }
 
+/**
+ * A small, reusable Composable to display a piece of information with a label.
+ * e.g., "Gender" (label) and "PRIA" (value).
+ */
 @Composable
 private fun InfoChip(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -123,6 +145,11 @@ private fun InfoChip(label: String, value: String) {
     }
 }
 
+/**
+ * Displays a card for a single past visit, showing the date, complaint, and status.
+ *
+ * @param visit The [HistoryItem] object for a specific visit.
+ */
 @Composable
 private fun VisitHistoryCard(visit: HistoryItem) { // <-- Tipe diubah ke HistoryItem
     val dateFormat = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale("id", "ID"))
@@ -139,6 +166,7 @@ private fun VisitHistoryCard(visit: HistoryItem) { // <-- Tipe diubah ke History
             Text("Keluhan Awal:", style = MaterialTheme.typography.labelMedium)
             Text(visit.initialComplaint, style = MaterialTheme.typography.bodyLarge)
             Spacer(modifier = Modifier.height(12.dp))
+            // Status text is colored based on whether it was completed or cancelled.
             Text(
                 "Status: ${visit.status.name}",
                 style = MaterialTheme.typography.labelMedium,

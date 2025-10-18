@@ -24,11 +24,18 @@ import androidx.compose.ui.unit.dp
 import com.example.project_mobileapps.data.local.DailyScheduleData
 import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
 
-    @Composable
-    fun ManagePracticeScheduleScreen(viewModel: ManagePracticeScheduleViewModel) {
+    /**
+     * Composable untuk layar manajemen jadwal praktik.
+     * Memungkinkan Admin/Dokter untuk mengatur jadwal mingguan, batas waktu panggil pasien,
+     * dan estimasi waktu layanan per pasien.
+     *
+     * @param viewModel ViewModel [ManagePracticeScheduleViewModel] yang menyediakan state dan logika untuk layar ini.
+     */
+    @Composable fun ManagePracticeScheduleScreen(viewModel: ManagePracticeScheduleViewModel) {
         val uiState by viewModel.uiState.collectAsState()
         val context = LocalContext.current
 
+        // State untuk mengontrol visibilitas bottom sheet konfirmasi penyimpanan.
         var showSaveConfirmation by remember { mutableStateOf(false) }
 
         if (showSaveConfirmation) {
@@ -43,12 +50,12 @@ import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
             )
         }
 
-        // LazyColumn menjadi pembungkus utama agar seluruh layar bisa di-scroll
+        // Menggunakan LazyColumn agar seluruh konten, termasuk header dan tombol, dapat di-scroll.
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp)
         ) {
-            // Item 1: Judul Halaman (sekarang bisa ikut scroll)
+            // Item 1: Judul Halaman
             item {
                 Text(
                     text = "Atur Jadwal & Waktu",
@@ -58,7 +65,7 @@ import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Item 2: Kartu Pengatur Waktu
+            // Item 2: Kartu Pengatur Waktu (Batas Panggil & Estimasi Layanan)
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(horizontal = 16.dp)) {
@@ -127,6 +134,14 @@ import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
         }
     }
 
+    /**
+     * Menampilkan satu baris untuk jadwal satu hari (misal: "Senin"), lengkap dengan
+     * jam praktik yang dapat diubah dan Switch untuk mengaktifkan/menonaktifkan.
+     *
+     * @param scheduleData Data jadwal untuk hari yang bersangkutan.
+     * @param onStatusChange Callback yang dipanggil saat Switch diubah (buka/tutup).
+     * @param onTimeChange Callback yang dipanggil saat waktu mulai atau selesai diubah melalui TimePickerDialog.
+     */
 @Composable
 fun ScheduleDayRow(
     scheduleData: DailyScheduleData,
@@ -192,6 +207,14 @@ fun ScheduleDayRow(
     }
 }
 
+    /**
+     * Komponen UI yang dapat digunakan kembali untuk mengatur nilai waktu (menit)
+     * menggunakan tombol tambah (+) dan kurang (-).
+     * Digunakan di sini untuk mengatur batas waktu panggil pasien.
+     *
+     * @param currentTime Nilai waktu (menit) saat ini yang ditampilkan.
+     * @param onTimeChange Callback yang dipanggil saat tombol + atau - ditekan, membawa perubahan (+1 atau -1).
+     */
     @Composable
     private fun CallTimeLimitSelector(
         currentTime: Int,
@@ -226,6 +249,13 @@ fun ScheduleDayRow(
         }
     }
 
+    /**
+     * Komponen UI yang dapat digunakan kembali, identik dengan [CallTimeLimitSelector],
+     * namun digunakan untuk mengatur estimasi waktu layanan per pasien.
+     *
+     * @param currentTime Nilai waktu (menit) saat ini yang ditampilkan.
+     * @param onTimeChange Callback yang dipanggil saat tombol + atau - ditekan.
+     */
     @Composable
     private fun ServiceTimeSelector(
         currentTime: Int,
