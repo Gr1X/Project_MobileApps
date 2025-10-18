@@ -2,9 +2,11 @@ package com.example.project_mobileapps.ui.themes
 
 import androidx.compose.ui.graphics.Color
 
-// PALET WARNA BARU "Modern Clinic"
+// PALET WARNA KUSTOM "Modern Clinic"
+// Warna-warna ini digunakan untuk mendefinisikan LightColorScheme di Theme.kt
 
-// Warna Utama
+// --- Warna Utama ---
+/** Warna primer utama aplikasi (Biru keunguan). Digunakan untuk tombol utama, header, highlight. */
 val PrimaryPeriwinkle = Color(0xFF6D80E3) // Biru keunguan yang dominan untuk kartu utama dan highlight
 val OnPrimary = Color.White               // Teks putih di atas warna utama
 
@@ -19,3 +21,7 @@ val TextSecondary = Color(0xFF8A8A8E)     // Abu-abu medium untuk sub-judul dan 
 // Warna Aksen & Lainnya
 val AccentStar = Color(0xFFFFC107)        // Kuning untuk ikon bintang rating
 val LightPurpleGray = Color(0xFFE8EAF6)
+// --- Warna Status Tambahan (jika diperlukan) ---
+// val SuccessGreen = Color(0xFF4CAF50)
+// val ErrorRed = Color(0xFFF44336)
+// val WarningOrange = Color(0xFFFF9800)

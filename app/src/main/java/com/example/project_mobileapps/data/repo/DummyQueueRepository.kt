@@ -21,12 +21,22 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Calendar
 import java.util.Locale
-
+/**
+ * Implementasi 'dummy' (in-memory) dari [QueueRepository].
+ * Menggunakan singleton object dan data palsu (DummyDatabases) untuk mensimulasikan
+ * semua logika antrian, jadwal, dan laporan tanpa backend sungguhan.
+ * Sangat berguna untuk pengembangan dan pengujian UI.
+ */
 object DummyQueueRepository : QueueRepository {
 
     private val repositoryScope = CoroutineScope(Dispatchers.Default)
     private val doctorList = mapOf("doc_123" to "Dr. Budi Santoso")
-
+    /**
+     * Fungsi helper internal untuk mengecek apakah jam praktik sedang buka
+     * berdasarkan jadwal dan waktu saat ini.
+     * @param doctorId ID dokter yang jadwalnya diperiksa.
+     * @return `true` jika sedang dalam jam buka, `false` jika tidak.
+     */
     private fun isCurrentlyOpen(doctorId: String): Boolean {
         val schedules = DummyScheduleDatabase.weeklySchedules[doctorId] ?: return false
         val calendar = Calendar.getInstance()
@@ -68,6 +78,11 @@ object DummyQueueRepository : QueueRepository {
     )
 
     // --- PERUBAHAN 2: Tambahkan blok init untuk menjalankan timer ---
+    /**
+     * Blok inisialisasi. Dijalankan saat object ini pertama kali dibuat.
+     * Menjalankan coroutine (timer) untuk mengecek status jam buka/tutup
+     * secara periodik setiap 1 menit.
+     */
     init {
         repositoryScope.launch {
             while (true) {
@@ -79,6 +94,10 @@ object DummyQueueRepository : QueueRepository {
     }
 
     // --- PERUBAHAN 3: Buat fungsi terpisah untuk update status ---
+    /**
+     * Fungsi helper yang dipanggil oleh timer [init] untuk memperbarui
+     * [practiceStatusFlow] jika status jam buka berubah (misal: dari 08:59 ke 09:00).
+     */
     private fun updatePracticeStatusBasedOnTime(doctorId: String) {
         val isOpenNow = isCurrentlyOpen(doctorId)
         _practiceStatusFlow.update { currentMap ->
@@ -341,6 +360,7 @@ object DummyQueueRepository : QueueRepository {
 
     override suspend fun setPracticeOpen(doctorId: String, isOpen: Boolean): Result<Unit> {
         val currentStatus = _practiceStatusFlow.value[doctorId] ?: return Result.failure(Exception("Dokter tidak ditemukan"))
+        // Update status praktik secara manual
         _practiceStatusFlow.update {
             it.toMutableMap().apply { this[doctorId] = currentStatus.copy(isPracticeOpen = isOpen) }
         }
@@ -402,6 +422,7 @@ object DummyQueueRepository : QueueRepository {
     override suspend fun updateDoctorSchedule(doctorId: String, newSchedule: List<DailyScheduleData>): Result<Unit> {
         delay(500)
         DummyScheduleDatabase.weeklySchedules[doctorId] = newSchedule.toMutableList()
+        // Perbarui status 'isPracticeOpen' saat ini juga, siapa tahu jadwal hari ini berubah
         _practiceStatusFlow.update {
             it.toMutableMap().apply {
                 val current = this[doctorId]

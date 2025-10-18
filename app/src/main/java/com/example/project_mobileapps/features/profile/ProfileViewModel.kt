@@ -10,7 +10,20 @@ import com.example.project_mobileapps.data.model.User
 import com.example.project_mobileapps.data.repo.AuthRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-
+/**
+ * Model data (UI State) untuk [ProfileScreen] dan [EditProfileScreen].
+ * Menyimpan data pengguna yang sedang login, serta state untuk form edit profil.
+ *
+ * @property user Objek [User] yang sedang login, diambil dari [AuthRepository].
+ * @property isLoading Menandakan apakah data awal sedang dimuat.
+ * @property name State untuk field input Nama di [EditProfileScreen].
+ * @property phoneNumber State untuk field input Nomor Telepon di [EditProfileScreen].
+ * @property dateOfBirth State untuk field input Tanggal Lahir di [EditProfileScreen].
+ * @property gender State untuk field input Jenis Kelamin di [EditProfileScreen].
+ * @property nameError Pesan error untuk validasi nama.
+ * @property dateOfBirthError Pesan error untuk validasi tanggal lahir (saat ini tidak dipakai).
+ * @property phoneError Pesan error untuk validasi nomor telepon.
+ */
 
 data class ProfileUiState(
     val user: User? = null,
@@ -23,7 +36,14 @@ data class ProfileUiState(
     val dateOfBirthError: String? = null,
     val phoneError: String? = null
 )
-
+/**
+ * ViewModel untuk [ProfileScreen] dan [EditProfileScreen].
+ * Bertanggung jawab untuk:
+ * 1. Mengamati [AuthRepository.currentUser] dan mempublikasikannya ke UI.
+ * 2. Menyediakan state dan event handler untuk form Edit Profil.
+ * 3. Menjalankan logika validasi dan penyimpanan data (update) profil.
+ * 4. Menangani logika untuk 'Role Switcher' (fitur development).
+ */
 class ProfileViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState
@@ -59,7 +79,11 @@ class ProfileViewModel : ViewModel() {
     fun onGenderChange(newGender: Gender) {
         _uiState.update { it.copy(gender = newGender) }
     }
-
+    /**
+     * Menjalankan proses validasi dan update profil pengguna.
+     * Dipanggil dari [EditProfileScreen] saat "Simpan" dikonfirmasi.
+     * @return [Result.success] jika validasi lolos, [Result.failure] jika gagal.
+     */
     fun updateUser(): Result<Unit> {
         val currentState = _uiState.value
         val name = currentState.name.trim()
@@ -90,7 +114,11 @@ class ProfileViewModel : ViewModel() {
         }
         return Result.success(Unit)
     }
-
+    /**
+     * Memanggil fungsi 'switchUserRole' di [AuthRepository].
+     * Ini adalah fitur development untuk testing.
+     * @param newRole Role baru yang akan di-login-kan.
+     */
     fun switchRole(newRole: Role) {
         viewModelScope.launch {
             AuthRepository.switchUserRole(newRole)

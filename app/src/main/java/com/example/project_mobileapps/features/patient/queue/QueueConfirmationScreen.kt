@@ -9,7 +9,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
+/**
+ * Composable untuk layar Konfirmasi Antrian.
+ * Ditampilkan setelah pasien berhasil mengambil nomor antrian.
+ * Ini adalah layar "dumb" (stateless) yang hanya menerima data.
+ *
+ * @param queueNumber Nomor antrian (String) yang berhasil didapat untuk ditampilkan.
+ * @param onNavigateToHome Callback yang dipanggil saat tombol "Kembali ke Beranda" diklik.
+ */
 @Composable
 fun QueueConfirmationScreen(
     queueNumber: String,

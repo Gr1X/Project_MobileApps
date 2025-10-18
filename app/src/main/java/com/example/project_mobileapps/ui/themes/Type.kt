@@ -9,6 +9,10 @@ import androidx.compose.ui.unit.sp
 import com.example.project_mobileapps.R
 
 // 1. Definisikan keluarga font Poppins dengan semua varian ketebalan yang Anda punya
+/**
+ * Mendefinisikan [FontFamily] kustom menggunakan file font Poppins dari `res/font`.
+ * Ini mengelompokkan semua varian ketebalan font Poppins ke dalam satu keluarga.
+ */
 val PoppinsFamily = FontFamily(
     Font(R.font.poppins_thin, FontWeight.Thin),
     Font(R.font.poppins_extralight, FontWeight.ExtraLight),
@@ -22,6 +26,12 @@ val PoppinsFamily = FontFamily(
 )
 
 // 2. Buat "Skala Tipografi" yang lengkap menggunakan font Poppins
+/**
+ * Mendefinisikan skala tipografi kustom untuk aplikasi menggunakan [PoppinsFamily].
+ * Objek [Typography] ini akan di-pass ke [MaterialTheme] di `Theme.kt`.
+ * Setiap [TextStyle] mendefinisikan `fontFamily`, `fontWeight`, `fontSize`, `lineHeight`, dll.
+ * Nama-nama properti (misal: `headlineLarge`, `bodyMedium`) mengikuti skala tipe Material Design 3.
+ */
 val Typography = Typography(
     // Judul Paling Besar (misal: "Jadwal Praktik" di header)
     headlineLarge = TextStyle(

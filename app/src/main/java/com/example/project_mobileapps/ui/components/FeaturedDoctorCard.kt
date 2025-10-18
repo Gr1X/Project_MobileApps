@@ -22,7 +22,18 @@ import com.example.project_mobileapps.data.model.QueueItem
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
+/**
+ * Composable reusable untuk menampilkan kartu dokter unggulan (featured doctor)
+ * di [HomeScreen]. Kartu ini memiliki desain yang lebih menonjol dengan
+ * background berwarna primary, gambar dokter, status praktik, tombol aksi,
+ * dan ringkasan antrian.
+ *
+ * @param doctor Data [Doctor] yang akan ditampilkan.
+ * @param practiceStatus Status praktik [PracticeStatus] dokter saat ini.
+ * @param upcomingQueue Daftar [QueueItem] yang aktif (Menunggu, Dipanggil, Dilayani).
+ * @param availableSlots Jumlah sisa slot antrian yang tersedia.
+ * @param onTakeQueueClick Callback yang dipanggil saat tombol "Ambil Antrian" diklik.
+ */
 @Composable
 fun FeaturedDoctorCard(
     doctor: Doctor,

@@ -23,7 +23,15 @@ import com.example.project_mobileapps.data.model.Gender
 import com.example.project_mobileapps.ui.components.CircularBackButton
 import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
 import java.util.*
-
+/**
+ * Composable untuk layar Edit Profil.
+ * Menampilkan form yang diisi dengan data dari [ProfileViewModel] dan
+ * memungkinkan pengguna untuk mengubahnya.
+ *
+ * @param onNavigateBack Callback untuk kembali ke layar [ProfileScreen].
+ * @param viewModel ViewModel [ProfileViewModel] yang sama dengan [ProfileScreen],
+ * menyediakan state untuk form.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditProfileScreen(

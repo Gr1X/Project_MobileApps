@@ -12,7 +12,20 @@ import com.example.project_mobileapps.data.repo.QueueRepository
 import com.example.project_mobileapps.features.admin.manageSchedule.PatientQueueDetails
 import kotlinx.coroutines.flow.*
 import java.util.Calendar
-
+/**
+ * Model data (UI State) untuk [DoctorDashboardScreen].
+ * Menggabungkan semua informasi yang diperlukan oleh UI.
+ *
+ * @property greeting Salam sapaan (misal: "Selamat Pagi").
+ * @property doctorName Nama dokter yang sedang login.
+ * @property topQueueList Daftar 3 pasien teratas dalam antrian.
+ * @property practiceStatus Objek [PracticeStatus] yang berisi info praktik (buka/tutup, antrian, dll).
+ * @property isLoading Status loading awal.
+ * @property waitingInQueue Jumlah total pasien yang sedang menunggu (termasuk dipanggil/dilayani).
+ * @property nextQueueNumber Nomor antrian berikutnya yang akan dipanggil (status MENUNGGU).
+ * @property selectedPatient Pasien yang dipilih untuk ditampilkan di bottom sheet detail.
+ * @property todaySchedule Jadwal [DailyScheduleData] untuk hari ini.
+ */
 data class DoctorUiState(
     val greeting: String = "Selamat Datang",
     val doctorName: String = "Dokter",
@@ -24,14 +37,27 @@ data class DoctorUiState(
     val selectedPatient: PatientQueueDetails? = null,
     val todaySchedule: DailyScheduleData? = null // <-- TAMBAHKAN BARIS INI
 )
-
+/**
+ * ViewModel untuk [DoctorDashboardScreen].
+ * Bertanggung jawab untuk mengumpulkan data dari berbagai repository,
+ * menggabungkannya menjadi satu [DoctorUiState], dan mengelola logika
+ * untuk pemilihan pasien.
+ *
+ * @param queueRepository Repository untuk data antrian, status praktik, dan jadwal.
+ * @param authRepository Repository untuk data pengguna (dokter dan pasien).
+ */
 class DoctorViewModel(
     private val queueRepository: QueueRepository,
     private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _selectedPatient = MutableStateFlow<PatientQueueDetails?>(null)
-
+    /**
+     * StateFlow publik yang diekspos ke UI.
+     * Menggunakan `combine` untuk menggabungkan 4 aliran data (Flow) menjadi satu [DoctorUiState].
+     * Setiap kali salah satu dari 4 flow ini berubah, `combine` akan dieksekusi ulang
+     * dan UI state akan diperbarui secara otomatis.
+     */
     val uiState: StateFlow<DoctorUiState> = combine(
         queueRepository.dailyQueuesFlow,
         queueRepository.practiceStatusFlow,
@@ -87,16 +113,26 @@ class DoctorViewModel(
             else -> "Selamat Malam"
         }
     }
-
+    /**
+     * Dipanggil dari UI saat dokter mengklik kartu pasien.
+     * Menyimpan data pasien ke state [selectedPatient] untuk memicu bottom sheet.
+     * @param patient Data pasien yang diklik.
+     */
     fun selectPatient(patient: PatientQueueDetails) {
         _selectedPatient.value = patient
     }
-
+    /**
+     * Dipanggil dari UI saat bottom sheet ditutup (dismiss).
+     * Mengosongkan state [selectedPatient].
+     */
     fun clearSelectedPatient() {
         _selectedPatient.value = null
     }
 }
-
+/**
+ * Factory untuk [DoctorViewModel].
+ * Diperlukan untuk meng-inject [QueueRepository] dan [AuthRepository].
+ */
 class DoctorViewModelFactory(
     private val queueRepository: QueueRepository,
     private val authRepository: AuthRepository

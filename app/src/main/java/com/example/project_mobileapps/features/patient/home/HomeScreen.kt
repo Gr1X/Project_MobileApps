@@ -44,10 +44,25 @@ import java.util.Date
 import java.util.concurrent.TimeUnit
 import com.example.project_mobileapps.ui.components.FeaturedDoctorCard
 
-
+/**
+ * Data class internal untuk merepresentasikan item pada [ActionButtonsRow].
+ * @param label Teks yang ditampilkan di bawah ikon.
+ * @param icon Ikon [ImageVector] yang akan ditampilkan.
+ */
 private data class ActionItem(val label: String, val icon: ImageVector)
 private data class DayData(val day: String, val date: String, val isSelected: Boolean = false)
-
+/**
+ * Composable utama untuk layar Home Pasien.
+ * Menampilkan [HomeUiState] dari [HomeViewModel].
+ *
+ * @param uiState State UI saat ini dari [HomeViewModel].
+ * @param onDoctorClick Callback saat kartu dokter diklik, membawa ID dokter.
+ * @param onNavigateToQueue Callback untuk navigasi ke layar antrian (saat ini tidak dipakai langsung).
+ * @param onProfileClick Callback saat ikon profil di TopAppBar diklik.
+ * @param onTakeQueueClick Callback saat tombol 'Ambil Antrian' di [FeaturedDoctorCard] diklik.
+ * @param onNewsClick Callback saat tombol aksi "Berita Kesehatan" diklik.
+ * @param modifier Modifier.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -225,7 +240,12 @@ fun HomeScreen(
         }
     }
 }
-
+/**
+ * Composable (saat ini tidak terpakai di HomeScreen) untuk menampilkan
+ * status antrian pengguna.
+ * @param queue Data [QueueItem] milik pengguna.
+ * @param onClick Aksi saat kartu diklik.
+ */
 @Composable
 fun QueueStatusCard(queue: QueueItem, onClick: () -> Unit) {
     Card(
@@ -259,7 +279,11 @@ fun QueueStatusCard(queue: QueueItem, onClick: () -> Unit) {
         }
     }
 }
-
+/**
+ * Composable helper (private) untuk menata [ActionButton] dalam satu baris.
+ * @param actions Daftar [ActionItem] yang akan ditampilkan.
+ * @param onActionClick Callback yang dipanggil saat tombol diklik, membawa label tombol.
+ */
 @Composable
 private fun ActionButtonsRow(
     actions: List<ActionItem>,
@@ -278,7 +302,12 @@ private fun ActionButtonsRow(
         }
     }
 }
-
+/**
+ * Composable helper (private) untuk satu tombol aksi (Ikon + Label).
+ * @param label Teks di bawah ikon.
+ * @param icon Ikon yang ditampilkan.
+ * @param onClick Aksi saat diklik.
+ */
 @Composable
 private fun ActionButton(
     label: String,

@@ -24,14 +24,30 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import com.example.project_mobileapps.R
-
+/**
+ * Model data UI lokal untuk satu artikel berita.
+ * Dipakai oleh [NewsScreen] dan [NewsViewModel].
+ *
+ * @property title Judul artikel.
+ * @property source Nama sumber berita (misal: "Detik Health").
+ * @property imageUrl URL ke gambar thumbnail artikel.
+ * @property articleUrl URL asli ke artikel lengkap.
+ */
 data class NewsArticleUI(
     val title: String,
     val source: String,
     val imageUrl: String?,
     val articleUrl: String?
 )
-
+/**
+ * Composable untuk layar Daftar Berita Kesehatan.
+ * Menampilkan [NewsUiState] dari [NewsViewModel].
+ *
+ * @param onNewsClick Callback yang dipanggil saat artikel diklik.
+ * Membawa URL artikel yang sudah di-encode.
+ * @param viewModel ViewModel [NewsViewModel] yang menyediakan data.
+ * @param onNavigateBack Callback untuk kembali ke layar sebelumnya.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewsScreen(
@@ -83,6 +99,11 @@ fun NewsScreen(
 // =======================================================
 // GANTI SELURUH FUNGSI INI
 // =======================================================
+/**
+ * Composable helper (private) untuk menampilkan satu kartu item berita.
+ * @param article Data [NewsArticleUI] yang akan ditampilkan.
+ * @param onClick Callback yang akan dipanggil saat kartu ini diklik.
+ */
 @Composable
 fun NewsItem(article: NewsArticleUI, onClick: () -> Unit) {
     Card(

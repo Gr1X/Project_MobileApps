@@ -32,7 +32,14 @@ import com.example.project_mobileapps.ui.themes.TextSecondary
 import kotlinx.coroutines.delay
 import java.util.Date
 import java.util.concurrent.TimeUnit
-
+/**
+ * Composable utama untuk layar Status Antrian Pasien.
+ * Menampilkan [QueueUiState] dari [QueueViewModel].
+ *
+ * @param queueViewModel ViewModel [QueueViewModel] yang menyediakan state.
+ * @param onBackToHome Callback untuk navigasi kembali ke layar Home.
+ * @param onNavigateToTakeQueue Callback untuk navigasi ke layar ambil antrian (Detail Dokter).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QueueScreen(
@@ -47,6 +54,15 @@ fun QueueScreen(
     var displayedWaitTime by remember { mutableStateOf(uiState.estimatedWaitTime) }
 
     // ✅ 2. Effect to run the timer
+    /**
+     * [LaunchedEffect] ini bertanggung jawab untuk timer hitung mundur.
+     * `key1 = uiState.estimatedWaitTime` berarti:
+     * 1. Jika `uiState.estimatedWaitTime` berubah (misal: dari 30 ke 25),
+     * efek ini akan Batal dan Dijalankan Ulang.
+     * 2. `displayedWaitTime` akan di-reset ke nilai baru (25).
+     * 3. Loop `while` akan mulai menghitung mundur dari 25, 24, 23, ...
+     * setiap 1 menit (`delay(60_000L)`).
+     */
     LaunchedEffect(key1 = uiState.estimatedWaitTime) {
         displayedWaitTime = uiState.estimatedWaitTime
         if (displayedWaitTime > 0) {
@@ -102,6 +118,14 @@ fun QueueScreen(
 }
 
 // --- PERBAIKAN UTAMA DI FUNGSI INI ---
+/**
+ * Composable helper (private) untuk kartu informasi utama.
+ * Tampilannya berubah-ubah berdasarkan status antrian pasien.
+ *
+ * @param uiState State UI saat ini.
+ * @param onTakeQueue Aksi jika tombol "Ambil Antrian" diklik.
+ * @param onCancelQueue Aksi jika tombol "Batalkan" diklik.
+ */
 @Composable
 private fun QueueInfoCard(
     uiState: QueueUiState,
@@ -209,7 +233,11 @@ private fun QueueInfoCard(
         }
     }
 }
-
+/**
+ * Composable helper (private) untuk Timer Hitung Mundur (15 menit).
+ * Digunakan saat status [QueueStatus.DIPANGGIL].
+ * @param calledAt Waktu [Date] kapan pasien dipanggil.
+ */
 @Composable
 private fun CountdownTimer(calledAt: Date) {
     val COUNTDOWN_DURATION_MS = 15 * 60 * 1000 // 15 menit
@@ -240,7 +268,11 @@ private fun CountdownTimer(calledAt: Date) {
         Text(timeRemainingString, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
     }
 }
-
+/**
+ * Composable helper (private) untuk Stopwatch.
+ * Digunakan saat status [QueueStatus.DILAYANI].
+ * @param startedAt Waktu [Date] kapan konsultasi dimulai.
+ */
 @Composable
 private fun StopwatchTimer(startedAt: Date) {
     var elapsedTimeString by remember { mutableStateOf("00:00") }
@@ -264,7 +296,11 @@ private fun StopwatchTimer(startedAt: Date) {
         Text(elapsedTimeString, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color(0xFF00C853))
     }
 }
-
+/**
+ * Composable helper (private) untuk kartu statistik (Antrian di depan & Estimasi).
+ * @param uiState State UI saat ini.
+ * @param displayedWaitTime Waktu tunggu (menit) yang sudah dihitung mundur.
+ */
 @Composable
 private fun StatCard(
     uiState: QueueUiState,
@@ -286,7 +322,10 @@ private fun StatCard(
         }
     }
 }
-
+/**
+ * Composable helper (private) untuk menampilkan daftar antrian aktif (chip).
+ * @param uiState State UI saat ini.
+ */
 @Composable
 private fun QueueChipList(uiState: QueueUiState) {
     if (uiState.upcomingQueues.isEmpty()) {
@@ -311,7 +350,11 @@ private fun QueueChipList(uiState: QueueUiState) {
         }
     }
 }
-
+/**
+ * Composable helper (private) untuk satu item statistik di [StatCard].
+ * @param value Nilai (misal: "5 Orang").
+ * @param label Label (misal: "Di Depan Anda").
+ */
 @Composable
 fun StatItem(value: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {

@@ -12,6 +12,19 @@ import com.example.project_mobileapps.data.repo.QueueRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.Calendar
+/**
+ * Model data (UI State) untuk [QueueScreen].
+ * Menyimpan semua informasi yang diperlukan untuk menampilkan status antrian pasien.
+ *
+ * @property myQueueItem Data antrian [QueueItem] milik pasien yang sedang login (jika ada).
+ * @property practiceStatus Status praktik dokter [PracticeStatus] saat ini.
+ * @property queuesAhead Jumlah antrian di depan pasien (yang masih menunggu/dipanggil).
+ * @property estimatedWaitTime Estimasi waktu tunggu dalam menit.
+ * @property availableSlots Jumlah sisa slot antrian yang tersedia hari ini.
+ * @property upcomingQueues Daftar semua antrian yang aktif (Menunggu, Dipanggil, Dilayani).
+ * @property activeQueueCount Jumlah total antrian yang aktif.
+ * @property todaySchedule Data [DailyScheduleData] untuk jadwal praktik hari ini.
+ */
 
 // --- PERUBAHAN 1: Tambahkan properti untuk jam praktik hari ini ---
 data class QueueUiState(
@@ -24,7 +37,14 @@ data class QueueUiState(
     val activeQueueCount: Int = 0,
     val todaySchedule: DailyScheduleData? = null // <-- TAMBAHKAN INI
 )
-
+/**
+ * ViewModel untuk [QueueScreen].
+ * Bertanggung jawab untuk menggabungkan data antrian, status praktik, dan user
+ * untuk menghitung statistik antrian yang relevan bagi pasien.
+ *
+ * @param queueRepository Repository untuk data antrian dan jadwal.
+ * @param authRepository Repository untuk data user yang login.
+ */
 class QueueViewModel(
     private val queueRepository: QueueRepository,
     private val authRepository: AuthRepository
@@ -86,7 +106,10 @@ class QueueViewModel(
             }
         }
     }
-
+    /**
+     * Membatalkan antrian milik pengguna yang sedang login.
+     * Dipanggil dari [QueueScreen] setelah konfirmasi.
+     */
     fun cancelMyQueue() {
         viewModelScope.launch {
             val myQueue = uiState.value.myQueueItem
@@ -97,7 +120,10 @@ class QueueViewModel(
         }
     }
 }
-
+/**
+ * Factory untuk [QueueViewModel].
+ * Diperlukan untuk meng-inject [QueueRepository] dan [AuthRepository].
+ */
 // Factory tidak perlu diubah
 class QueueViewModelFactory(
     private val queueRepository: QueueRepository,
