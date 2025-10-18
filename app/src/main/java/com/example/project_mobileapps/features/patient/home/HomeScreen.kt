@@ -211,21 +211,7 @@ fun HomeScreen(
                 }
             )
 
-            Spacer(Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Jadwal Praktik",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(16.dp))
 
             if (uiState.doctor != null) {
                 FeaturedDoctorCard(

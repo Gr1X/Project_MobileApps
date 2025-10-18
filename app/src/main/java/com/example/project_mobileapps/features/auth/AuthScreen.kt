@@ -28,6 +28,7 @@ import com.example.project_mobileapps.ui.themes.TextSecondary
 
 private enum class AuthTab { LOGIN, REGISTER }
 
+
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun AuthScreen(
@@ -37,10 +38,6 @@ fun AuthScreen(
 ) {
     val authState by authViewModel.authState.collectAsState()
     var selectedTab by remember { mutableStateOf(if (startScreen == "login") AuthTab.LOGIN else AuthTab.REGISTER) }
-
-    var name by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
     var rememberMe by remember { mutableStateOf(false) }
 
     LaunchedEffect(authState.loggedInUser) {
@@ -49,45 +46,41 @@ fun AuthScreen(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background // Menggunakan AppBackground (abu-abu terang)
+        color = MaterialTheme.colorScheme.background
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 24.dp)
-                .verticalScroll(rememberScrollState()), // <-- TAMBAHKAN INI
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Spacer untuk mendorong konten ke tengah secara vertikal
             Spacer(modifier = Modifier.weight(0.5f))
-
             AuthHeader(selectedTab)
             Spacer(modifier = Modifier.height(32.dp))
-
             AuthTabSelector(selectedTab) { newTab ->
                 selectedTab = newTab
                 authViewModel.resetAuthState()
             }
             Spacer(modifier = Modifier.height(32.dp))
 
-
             AnimatedContent(
                 targetState = selectedTab,
-                transitionSpec = {
-                    fadeIn(animationSpec = tween(200, delayMillis = 90)) togetherWith
-                            fadeOut(animationSpec = tween(90))
-                }, label = "Auth Form Animation"
+                transitionSpec = { fadeIn(tween(200, 90)) togetherWith fadeOut(tween(90)) },
+                label = "Auth Form Animation"
             ) { tab ->
                 if (tab == AuthTab.LOGIN) {
                     LoginFields(
-                        email = email, onEmailChange = { email = it },
-                        password = password, onPasswordChange = { password = it }
+                        email = authState.loginEmail, onEmailChange = authViewModel::onLoginEmailChange,
+                        password = authState.loginPassword, onPasswordChange = authViewModel::onLoginPasswordChange,
+                        emailError = authState.loginEmailError, passwordError = authState.loginPasswordError
                     )
                 } else {
                     RegisterFields(
-                        name = name, onNameChange = { name = it },
-                        email = email, onEmailChange = { email = it },
-                        password = password, onPasswordChange = { password = it }
+                        name = authState.registerName, onNameChange = authViewModel::onRegisterNameChange,
+                        email = authState.registerEmail, onEmailChange = authViewModel::onRegisterEmailChange,
+                        password = authState.registerPassword, onPasswordChange = authViewModel::onRegisterPasswordChange,
+                        nameError = authState.registerNameError, emailError = authState.registerEmailError, passwordError = authState.registerPasswordError
                     )
                 }
             }
@@ -99,42 +92,36 @@ fun AuthScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = rememberMe,
-                            onCheckedChange = { rememberMe = it },
-                            colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                        )
+                        Checkbox(checked = rememberMe, onCheckedChange = { rememberMe = it })
                         Text("Ingat Saya", style = MaterialTheme.typography.bodyMedium)
                     }
-                    TextButton(onClick = { /* TODO: Implement Lupa Password Flow */ }) {
-                        Text(
-                            "Lupa Password?",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                    TextButton(onClick = { /* TODO */ }) {
+                        Text("Lupa Password?", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             } else {
-                // Spacer pengganti agar tinggi layout konsisten
                 Spacer(modifier = Modifier.height(48.dp))
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-            val buttonText = if (selectedTab == AuthTab.LOGIN) "Login" else "Daftar"
             Button(
                 onClick = {
-                    if (selectedTab == AuthTab.LOGIN) authViewModel.loginUser(email, password)
-                    else authViewModel.registerUser(name, email, password)
+                    if (selectedTab == AuthTab.LOGIN) authViewModel.loginUser()
+                    else authViewModel.registerUser()
                 },
                 enabled = !authState.isLoading,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(16.dp) // Menggunakan warna PrimaryPeriwinkle
+                shape = RoundedCornerShape(16.dp)
             ) {
                 if (authState.isLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
-                else Text(buttonText, style = MaterialTheme.typography.labelLarge)
+                else Text(if (selectedTab == AuthTab.LOGIN) "Login" else "Daftar", style = MaterialTheme.typography.labelLarge)
             }
 
-            // --- TAMBAHKAN TOMBOL LOGIN CEPAT DI SINI ---
+            // Menampilkan error umum dari server (misal: "Email sudah terdaftar")
+            authState.error?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 16.dp), textAlign = TextAlign.Center)
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
             OutlinedButton(
                 onClick = { authViewModel.loginUser("pasien@gmail.com", "password") },
@@ -145,33 +132,17 @@ fun AuthScreen(
                 Text("Login Cepat (Pasien)", style = MaterialTheme.typography.labelLarge)
             }
 
-            authState.error?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 16.dp), textAlign = TextAlign.Center)
-            }
-
             Spacer(modifier = Modifier.height(24.dp))
             DividerWithText("Atau lanjutkan dengan")
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Tombol Social Login
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp) // Mengatur jarak vertikal antar tombol
-            ) {
-                SocialLoginButton(
-                    text = "Google",
-                    iconRes = R.drawable.google,
-                    onClick = { /*TODO*/ },
-                    // Modifier.weight tidak lagi diperlukan di sini
-                    modifier = Modifier.fillMaxWidth() // Buat tombol memenuhi lebar
-                )
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                SocialLoginButton(text = "Google", iconRes = R.drawable.google, onClick = { /*TODO*/ }, modifier = Modifier.fillMaxWidth())
             }
-
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
-
 @Composable
 private fun AuthHeader(selectedTab: AuthTab) {
     val title = if (selectedTab == AuthTab.LOGIN) "Login ke Akun Anda" else "Buat Akun untuk Memulai"
@@ -215,45 +186,64 @@ private fun AuthTabSelector(selectedTab: AuthTab, onTabSelected: (AuthTab) -> Un
 
 // Menggunakan OutlinedTextField agar sesuai dengan tema terang
 @Composable
-private fun LoginFields(email: String, onEmailChange: (String) -> Unit, password: String, onPasswordChange: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+private fun LoginFields(
+    email: String, onEmailChange: (String) -> Unit,
+    password: String, onPasswordChange: (String) -> Unit,
+    emailError: String?, passwordError: String?
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value = email, onValueChange = onEmailChange,
-            label = { Text("Alamat Email", style = MaterialTheme.typography.bodyMedium) },
+            label = { Text("Alamat Email") },
             leadingIcon = { Icon(Icons.Outlined.Email, null) },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp)
+            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),
+            isError = emailError != null,
+            supportingText = { if (emailError != null) Text(emailError, color = MaterialTheme.colorScheme.error) }
         )
         OutlinedTextField(
             value = password, onValueChange = onPasswordChange,
-            label = { Text("Password", style = MaterialTheme.typography.bodyMedium) },
+            label = { Text("Password") },
             leadingIcon = { Icon(Icons.Outlined.Lock, null) },
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp)
+            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),
+            isError = passwordError != null,
+            supportingText = { if (passwordError != null) Text(passwordError, color = MaterialTheme.colorScheme.error) }
         )
     }
 }
 
 @Composable
-private fun RegisterFields(name: String, onNameChange: (String) -> Unit, email: String, onEmailChange: (String) -> Unit, password: String, onPasswordChange: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+private fun RegisterFields(
+    name: String, onNameChange: (String) -> Unit,
+    email: String, onEmailChange: (String) -> Unit,
+    password: String, onPasswordChange: (String) -> Unit,
+    nameError: String?, emailError: String?, passwordError: String?
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value = name, onValueChange = onNameChange,
-            label = { Text("Nama Lengkap", style = MaterialTheme.typography.bodyMedium) },
+            label = { Text("Nama Lengkap") },
             leadingIcon = { Icon(Icons.Outlined.Person, null) },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp)
+            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),
+            isError = nameError != null,
+            supportingText = { if (nameError != null) Text(nameError, color = MaterialTheme.colorScheme.error) }
         )
         OutlinedTextField(
             value = email, onValueChange = onEmailChange,
-            label = { Text("Alamat Email", style = MaterialTheme.typography.bodyMedium) },
+            label = { Text("Alamat Email") },
             leadingIcon = { Icon(Icons.Outlined.Email, null) },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp)
+            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),
+            isError = emailError != null,
+            supportingText = { if (emailError != null) Text(emailError, color = MaterialTheme.colorScheme.error) }
         )
         OutlinedTextField(
             value = password, onValueChange = onPasswordChange,
-            label = { Text("Password", style = MaterialTheme.typography.bodyMedium) },
+            label = { Text("Password") },
             leadingIcon = { Icon(Icons.Outlined.Lock, null) },
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp)
+            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),
+            isError = passwordError != null,
+            supportingText = { if (passwordError != null) Text(passwordError, color = MaterialTheme.colorScheme.error) }
         )
     }
 }

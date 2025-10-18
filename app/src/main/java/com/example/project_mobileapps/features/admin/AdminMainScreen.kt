@@ -1,6 +1,7 @@
+// Salin dan ganti seluruh isi file: features/admin/AdminMainScreen.kt
+
 package com.example.project_mobileapps.features.admin
 
-import android.R.attr.type
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -45,6 +46,8 @@ fun AdminMainScreen(
     val navBackStackEntry by adminNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    val showMainAppBar = currentRoute != "add_manual_queue" && currentRoute != "patient_history_detail/{patientId}"
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -52,8 +55,7 @@ fun AdminMainScreen(
                 currentRoute = currentRoute,
                 onNavigate = { route ->
                     adminNavController.navigate(route) {
-                        popUpTo(adminNavController.graph.startDestinationId)
-                        launchSingleTop = true
+                        popUpTo(adminNavController.graph.startDestinationId) { this@navigate.launchSingleTop = true }
                     }
                     scope.launch { drawerState.close() }
                 },
@@ -63,14 +65,17 @@ fun AdminMainScreen(
     ) {
         Scaffold(
             topBar = {
-                TopAppBar(
-                    title = {},
-                    navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Default.Menu, contentDescription = "Menu")
+                // --- PERUBAHAN 2: Tampilkan TopAppBar hanya jika diperlukan ---
+                if (showMainAppBar) {
+                    TopAppBar(
+                        title = {},
+                        navigationIcon = {
+                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                Icon(Icons.Default.Menu, contentDescription = "Menu")
+                            }
                         }
-                    }
-                )
+                    )
+                }
             },
             floatingActionButton = {
                 if (currentRoute == AdminMenu.Monitoring.route) {
@@ -83,7 +88,8 @@ fun AdminMainScreen(
             NavHost(
                 navController = adminNavController,
                 startDestination = AdminMenu.Dashboard.route,
-                modifier = Modifier.padding(innerPadding)
+                // --- PERUBAHAN 3: Gunakan padding hanya jika App Bar utama tampil ---
+                modifier = if (showMainAppBar) Modifier.padding(innerPadding) else Modifier
             ) {
                 composable(AdminMenu.Dashboard.route) {
                     AdminDashboardScreen(
@@ -96,36 +102,10 @@ fun AdminMainScreen(
                 composable(AdminMenu.Monitoring.route) {
                     val user by AuthRepository.currentUser.collectAsState()
                     val userRole = user?.role
-                    // BUAT VIEWMODEL YANG BENAR
                     val monitorViewModel: AdminQueueMonitorViewModel = viewModel(
-                        factory = AdminQueueMonitorViewModelFactory( // <-- Gunakan Factory yang sesuai
-                            AppContainer.queueRepository,
-                            AuthRepository
-                        )
+                        factory = AdminQueueMonitorViewModelFactory(AppContainer.queueRepository, AuthRepository)
                     )
-                    // PANGGIL FUNGSI COMPOSABLE YANG SUDAH DIPERBAIKI
-                    AdminQueueMonitorScreen(
-                        viewModel = monitorViewModel,
-                        currentUserRole = userRole
-                    )
-                }
-
-
-                composable(
-                    route = "patient_history_detail/{patientId}",
-                    arguments = listOf(navArgument("patientId") { type = NavType.StringType })
-                ) {
-                    // Buat ViewModel menggunakan Factory yang sudah kita siapkan
-                    val detailViewModel: PatientHistoryDetailViewModel = viewModel(
-                        factory = PatientHistoryDetailViewModelFactory(
-                            AppContainer.queueRepository,
-                            AuthRepository
-                        )
-                    )
-                    PatientHistoryDetailScreen(
-                        viewModel = detailViewModel,
-                        onNavigateBack = { adminNavController.popBackStack() }
-                    )
+                    AdminQueueMonitorScreen(viewModel = monitorViewModel, currentUserRole = userRole)
                 }
 
                 composable(AdminMenu.Management.items[0].route) { // "manage_schedule"
@@ -135,13 +115,9 @@ fun AdminMainScreen(
                     ManagePracticeScheduleScreen(viewModel = practiceViewModel)
                 }
 
-
                 composable(AdminMenu.Management.items[1].route) { // "reports"
                     val reportViewModel: ReportViewModel = viewModel(
-                        factory = ReportViewModelFactory(
-                            AppContainer.queueRepository,
-                            AuthRepository // <-- TAMBAHKAN AuthRepository DI SINI
-                        )
+                        factory = ReportViewModelFactory(AppContainer.queueRepository, AuthRepository)
                     )
                     ReportScreen(
                         viewModel = reportViewModel,
@@ -153,6 +129,19 @@ fun AdminMainScreen(
 
                 composable("add_manual_queue") {
                     AddManualQueueScreen(
+                        onNavigateBack = { adminNavController.popBackStack() }
+                    )
+                }
+
+                composable(
+                    route = "patient_history_detail/{patientId}",
+                    arguments = listOf(navArgument("patientId") { type = NavType.StringType })
+                ) {
+                    val detailViewModel: PatientHistoryDetailViewModel = viewModel(
+                        factory = PatientHistoryDetailViewModelFactory(AppContainer.queueRepository, AuthRepository)
+                    )
+                    PatientHistoryDetailScreen(
+                        viewModel = detailViewModel,
                         onNavigateBack = { adminNavController.popBackStack() }
                     )
                 }
