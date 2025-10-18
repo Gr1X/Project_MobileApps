@@ -48,7 +48,12 @@ import java.nio.charset.StandardCharsets
  */
 @Composable
 fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifier) {
+    // Mengamati state user yang sedang login dari AuthRepository.
     val currentUser by AuthRepository.currentUser.collectAsState()
+
+    // Secara dinamis menentukan tujuan awal aplikasi berdasarkan status login dan peran user.
+    // Jika user belum login (null), arahkan ke alur otentikasi.
+    // Jika sudah login, arahkan ke alur yang sesuai dengan perannya.
     val startDestination = when (currentUser?.role) {
         Role.PASIEN -> "main_flow"
         Role.DOKTER -> "doctor_flow"
@@ -58,6 +63,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
 
     NavHost(navController = navController, startDestination = startDestination, modifier = modifier) {
         // --- ALUR OTENTIKASI (SEBELUM LOGIN) ---
+        // 'navigation' digunakan untuk mengelompokkan beberapa layar terkait dalam satu alur (nested graph).
+        // Ini membantu mengorganisir dan mereset back stack dengan lebih mudah.
         navigation(startDestination = "getStarted", route = "auth_flow") {
             composable("getStarted") {
                 GetStartedScreen(
@@ -70,6 +77,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 AuthScreen(
                     authViewModel = viewModel(factory = AuthViewModelFactory()),
                     startScreen = screen,
+                    // Callback yang dijalankan setelah otentikasi berhasil.
+                    // Menavigasi user ke alur yang sesuai dan menghapus alur otentikasi dari back stack.
                     onAuthSuccess = { user ->
                         val destination = when (user.role) {
                             Role.PASIEN -> "main_flow"
@@ -82,27 +91,34 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             }
         }
 
+        // --- ALUR UTAMA UNTUK PASIEN ---
         navigation(startDestination = "main_host", route = "main_flow") {
+            // Layar utama yang menjadi host untuk Bottom Navigation Bar dan kontennya.
             composable("main_host") {
                 MainScreen(rootNavController = navController)
             }
+            // Layar detail dokter, menerima doctorId sebagai argumen.
             composable("doctorDetail/{doctorId}",
                 arguments = listOf(navArgument("doctorId") { type = NavType.StringType })
             ) {
                 val context = LocalContext.current
                 val scope = rememberCoroutineScope()
                 DoctorDetailScreen(
+                    // Aksi saat tombol booking ditekan. Meluncurkan coroutine untuk proses asynchronous.
                     onBookingClick = { doctorId, keluhan ->
                         val user = AuthRepository.currentUser.value
                         if (user != null) {
                             scope.launch {
                                 val result = AppContainer.queueRepository.takeQueueNumber(doctorId, user.uid, user.name, keluhan)
                                 if (result.isSuccess) {
+                                    // Navigasi ke layar konfirmasi jika berhasil.
                                     val newQueueNumber = result.getOrNull()?.queueNumber
                                     navController.navigate("queue_confirmation/$newQueueNumber") {
+                                        // Hapus layar detail dokter dari back stack agar tidak bisa kembali.
                                         popUpTo("doctorDetail/{doctorId}") { inclusive = true }
                                     }
                                 } else {
+                                    // Tampilkan pesan error jika gagal.
                                     Toast.makeText(context, result.exceptionOrNull()?.message ?: "Gagal", Toast.LENGTH_SHORT).show()
                                 }
                             }
@@ -111,6 +127,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
+
+            // Layar konfirmasi setelah berhasil mengambil nomor antrian.
             composable(
                 "queue_confirmation/{queueNumber}",
                 arguments = listOf(navArgument("queueNumber") { type = NavType.StringType })
@@ -120,12 +138,14 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     queueNumber = queueNumber,
                     onNavigateToHome = {
                         navController.navigate("main_host") {
+                            // Kembali ke home dan membersihkan back stack di atasnya.
                             popUpTo("main_host") { inclusive = true }
                         }
                     }
                 )
             }
 
+            // Layar untuk mengedit profil pengguna.
             composable("editProfile") {
                 EditProfileScreen(onNavigateBack = { navController.popBackStack() })
             }
@@ -134,6 +154,10 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 HistoryScreen(
                     onNavigateBack = { navController.popBackStack() },
                     onHistoryClick = { item ->
+                        // Catatan tentang URL Encoding:
+                        // Argumen string yang dilewatkan melalui route navigation tidak boleh mengandung karakter
+                        // seperti spasi atau simbol lain. Oleh karena itu, kita perlu meng-encode setiap parameter
+                        // sebelum membangun string route.
                         val encoder = { text: String -> URLEncoder.encode(text, StandardCharsets.UTF_8.toString()) }
 
                         val route = "historyDetail/" +
@@ -148,6 +172,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 )
             }
 
+            // Layar detail riwayat kunjungan, menerima beberapa argumen.
             composable(
                 route = "historyDetail/{visitId}/{visitDate}/{doctorName}/{complaint}/{status}",
                 arguments = listOf(
@@ -159,16 +184,18 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 )
             ) { backStackEntry ->
                 val arguments = backStackEntry.arguments ?: return@composable
+                // Di sini, kita perlu men-decode kembali argumen yang telah di-encode sebelumnya.
                 val decoder = { arg: String -> URLDecoder.decode(arg, StandardCharsets.UTF_8.toString()) }
 
                 val visitId = decoder(arguments.getString("visitId", ""))
                 val visitDate = decoder(arguments.getString("visitDate", ""))
                 val doctorName = decoder(arguments.getString("doctorName", ""))
                 val complaint = decoder(arguments.getString("complaint", ""))
+                // Mengkonversi string status kembali menjadi enum QueueStatus.
                 val status = try {
                     QueueStatus.valueOf(decoder(arguments.getString("status", "SELESAI")))
                 } catch (e: IllegalArgumentException) {
-                    QueueStatus.SELESAI
+                    QueueStatus.SELESAI // Default value jika terjadi error.
                 }
 
                 HistoryDetailScreen(
@@ -181,15 +208,18 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 )
             }
 
+            // Layar daftar berita kesehatan.
             composable("news") {
                 NewsScreen(
                     onNewsClick = { encodedUrl ->
+                        // URL berita juga di-encode untuk memastikan navigasi yang aman.
                         navController.navigate("articleDetail/$encodedUrl")
                     },
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
 
+            // Layar untuk menampilkan detail artikel berita dalam WebView.
             composable(
                 "articleDetail/{encodedUrl}",
                 arguments = listOf(navArgument("encodedUrl") { type = NavType.StringType })
@@ -203,10 +233,12 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             }
         }
 
+        // --- ALUR UTAMA UNTUK ADMIN ---
         navigation(startDestination = "admin_dashboard", route = "admin_flow") {
             composable("admin_dashboard") {
                 val scope = rememberCoroutineScope()
                 AdminMainScreen(
+                    // Aksi logout akan membersihkan state user dan mengarahkan kembali ke alur otentikasi.
                     onLogoutClick = {
                         scope.launch {
                             AuthRepository.logout()
@@ -219,11 +251,12 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             }
         }
 
+        // --- ALUR UTAMA UNTUK DOKTER ---
         navigation(startDestination = "doctor_main", route = "doctor_flow") {
             composable("doctor_main") { // Buat route baru untuk wadah utama
                 val scope = rememberCoroutineScope()
                 DoctorMainScreen(
-
+                    // Logika logout sama dengan admin.
                     onLogoutClick = {
                         scope.launch {
                             AuthRepository.logout()
