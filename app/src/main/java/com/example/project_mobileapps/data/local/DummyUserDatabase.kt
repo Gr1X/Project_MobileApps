@@ -3,9 +3,19 @@ package com.example.project_mobileapps.data.local
 import com.example.project_mobileapps.data.model.Gender
 import com.example.project_mobileapps.data.model.Role
 import com.example.project_mobileapps.data.model.User
-
+/**
+ * Singleton object yang berfungsi sebagai database sementara (in-memory) untuk data pengguna.
+ * Digunakan selama pengembangan dan pengujian untuk menyimulasikan pengambilan data pengguna
+ * tanpa memerlukan koneksi ke database eksternal (seperti Firebase Firestore atau Room).
+ */
 object DummyUserDatabase {
+    /**
+     * Daftar (list) yang dapat diubah (mutable) yang menyimpan semua data pengguna dummy.
+     * Dibuat mutable agar kita dapat menyimulasikan penambahan atau pengubahan pengguna
+     * saat aplikasi berjalan (misalnya untuk menguji fitur registrasi).
+     */
     val users = mutableListOf(
+        // --- Kumpulan Akun Pasien ---
         User(
             uid = "pasien01", name = "Budi Setiawan", email = "pasien@gmail.com", password = "password",
             role = Role.PASIEN, phoneNumber = "081234567890", gender = Gender.PRIA, dateOfBirth = "1990-05-15"
@@ -33,7 +43,7 @@ object DummyUserDatabase {
         // Akun Dokter
         User(uid = "dokter01", name = "Dr. Budi Santoso", email = "dokter@gmail.com", password = "dokter",
             role = Role.DOKTER),
-        //Akun aDmin
+        //Akun Admin
         User(uid = "admin01", name = "Admin Klinik", email = "admin@gmail.com", password = "admin",
             role = Role.ADMIN)
     )
