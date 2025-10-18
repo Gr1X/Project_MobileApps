@@ -26,16 +26,16 @@ object AuthRepository {
     }
 
     suspend fun logout() {
-//        AppContainer.queueRepository.resetQueue()
         _currentUser.value = null
     }
 
     suspend fun register(
         name: String,
         email: String,
-        password: String? = null, // Password sudah nullable
-        gender: Gender = Gender.PRIA, // Tambah parameter baru
-        dateOfBirth: String = "N/A"   // Tambah parameter baru
+        password: String? = null,
+        gender: Gender = Gender.PRIA,
+        dateOfBirth: String = "N/A",
+        phoneNumber: String = ""
     ): Result<User> {
         delay(1000)
         if (DummyUserDatabase.users.any { it.email == email }) {
@@ -48,8 +48,9 @@ object AuthRepository {
             email = email,
             password = password,
             role = Role.PASIEN,
-            gender = gender, // Masukkan data baru
-            dateOfBirth = dateOfBirth // Masukkan data baru
+            gender = gender,
+            dateOfBirth = dateOfBirth,
+            phoneNumber = phoneNumber
         )
         DummyUserDatabase.users.add(newUser)
         return Result.success(newUser)

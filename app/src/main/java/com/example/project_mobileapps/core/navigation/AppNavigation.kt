@@ -39,7 +39,13 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
-
+/**
+ * Composable utama yang mendefinisikan seluruh grafik navigasi aplikasi.
+ * Bertanggung jawab untuk mengatur semua rute (routes), argumen, dan alur transisi antar layar.
+ *
+ * @param navController Controller yang mengelola state navigasi aplikasi.
+ * @param modifier Modifier untuk diterapkan pada NavHost.
+ */
 @Composable
 fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifier) {
     val currentUser by AuthRepository.currentUser.collectAsState()

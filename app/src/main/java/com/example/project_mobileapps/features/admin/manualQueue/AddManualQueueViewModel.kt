@@ -1,7 +1,6 @@
 package com.example.project_mobileapps.features.admin.manualQueue
 
-import android.content.Context
-import android.widget.Toast
+import android.util.Patterns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -13,16 +12,21 @@ import com.example.project_mobileapps.data.repo.QueueRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-// --- HAPUS newPatientPassword DARI SINI ---
 data class AddManualQueueUiState(
     val searchQuery: String = "",
     val searchResults: List<User> = emptyList(),
     val isSearching: Boolean = false,
     val selectedUser: User? = null,
+    // Form state
     val newPatientName: String = "",
     val newPatientEmail: String = "",
+    val newPatientPhone: String = "",
     val newPatientGender: Gender = Gender.PRIA,
-    val newPatientDob: String = ""
+    val newPatientDob: String = "",
+    // Validation state
+    val nameError: String? = null,
+    val emailError: String? = null,
+    val phoneError: String? = null
 )
 
 class AddManualQueueViewModel(
@@ -34,15 +38,22 @@ class AddManualQueueViewModel(
     val uiState: StateFlow<AddManualQueueUiState> = _uiState.asStateFlow()
 
     fun onNewPatientNameChange(name: String) {
-        _uiState.update { it.copy(newPatientName = name) }
+        _uiState.update { it.copy(newPatientName = name, nameError = null) }
     }
     fun onNewPatientEmailChange(email: String) {
-        _uiState.update { it.copy(newPatientEmail = email) }
+        _uiState.update { it.copy(newPatientEmail = email, emailError = null) }
     }
-
-    fun onNewPatientGenderChange(gender: Gender) { _uiState.update { it.copy(newPatientGender = gender) } }
-    fun onNewPatientDobChange(dob: String) { _uiState.update { it.copy(newPatientDob = dob) } }
-
+    fun onNewPatientPhoneChange(phone: String) {
+        if (phone.all { it.isDigit() }) {
+            _uiState.update { it.copy(newPatientPhone = phone, phoneError = null) }
+        }
+    }
+    fun onNewPatientGenderChange(gender: Gender) {
+        _uiState.update { it.copy(newPatientGender = gender) }
+    }
+    fun onNewPatientDobChange(dob: String) {
+        _uiState.update { it.copy(newPatientDob = dob) }
+    }
     fun onSearchQueryChange(query: String) {
         _uiState.update { it.copy(searchQuery = query, isSearching = true, selectedUser = null) }
         if (query.isBlank()) {
@@ -54,50 +65,57 @@ class AddManualQueueViewModel(
             _uiState.update { it.copy(searchResults = results, isSearching = false) }
         }
     }
-
     fun onUserSelected(user: User) {
         _uiState.update { it.copy(selectedUser = user, searchQuery = user.name, searchResults = emptyList()) }
+    }
+    fun clearSelection() {
+        _uiState.update { AddManualQueueUiState() }
     }
 
     fun addQueueForSelectedUser(complaint: String, onResult: (Result<QueueItem>) -> Unit) {
         viewModelScope.launch {
-            val user = _uiState.value.selectedUser
-            if (user == null) {
-                onResult(Result.failure(Exception("Pasien belum dipilih.")))
-                return@launch
-            }
+            val user = _uiState.value.selectedUser ?: return@launch
             val result = queueRepository.addManualQueue(user.name, complaint)
             onResult(result)
         }
     }
 
-
     fun registerNewPatientAndAddQueue(complaint: String, onResult: (Result<QueueItem>) -> Unit) {
         viewModelScope.launch {
-            val name = _uiState.value.newPatientName
-            val email = _uiState.value.newPatientEmail
-            val gender = _uiState.value.newPatientGender
-            val dob = _uiState.value.newPatientDob
+            val state = _uiState.value
+            val name = state.newPatientName.trim()
+            val email = state.newPatientEmail.trim()
+            val phone = state.newPatientPhone.trim()
 
-            if (name.isBlank() || email.isBlank()) {
-                onResult(Result.failure(Exception("Nama dan Email harus diisi.")))
+            val isNameValid = name.isNotBlank()
+            val isEmailValid = Patterns.EMAIL_ADDRESS.matcher(email).matches()
+            val isPhoneValid = phone.isNotBlank()
+
+            if (!isNameValid || !isEmailValid || !isPhoneValid) {
+                _uiState.update {
+                    it.copy(
+                        nameError = if (!isNameValid) "Nama wajib diisi" else null,
+                        emailError = if (!isEmailValid) "Format email tidak valid" else null,
+                        phoneError = if (!isPhoneValid) "Nomor telepon wajib diisi" else null
+                    )
+                }
+                onResult(Result.failure(Exception("Data tidak valid.")))
                 return@launch
             }
 
-            // Panggil register dengan data yang lebih lengkap
-            val registerResult = authRepository.register(name, email, null, gender, dob)
-            if (registerResult.isSuccess) {
-                val newPatientUser = registerResult.getOrThrow()
-                val queueResult = queueRepository.addManualQueue(newPatientUser.name, complaint)
-                onResult(queueResult)
-            } else {
-                onResult(Result.failure(registerResult.exceptionOrNull() ?: Exception("Gagal mendaftar.")))
-            }
+            val registerResult = authRepository.register(name, email, null, state.newPatientGender, state.newPatientDob, phone)
+            registerResult.fold(
+                onSuccess = { newPatientUser ->
+                    val queueResult = queueRepository.addManualQueue(newPatientUser.name, complaint)
+                    onResult(queueResult)
+                },
+                onFailure = { onResult(Result.failure(it)) }
+            )
         }
     }
 }
 
-// Factory tidak perlu diubah
+// Factory perlu diubah untuk AuthRepository
 class AddManualQueueViewModelFactory(
     private val authRepository: AuthRepository,
     private val queueRepository: QueueRepository
