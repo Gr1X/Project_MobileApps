@@ -3,7 +3,7 @@ package com.example.project_mobileapps.features.patient.doctorDetail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.project_mobileapps.data.local.DailyScheduleData
+import com.example.project_mobileapps.data.model.DailyScheduleData
 import com.example.project_mobileapps.data.model.Doctor
 import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.repo.DoctorRepository

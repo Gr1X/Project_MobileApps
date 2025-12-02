@@ -1,6 +1,8 @@
 package com.example.project_mobileapps.data.model
 
+import com.google.firebase.firestore.Exclude
 import com.google.firebase.firestore.IgnoreExtraProperties
+import com.google.firebase.firestore.PropertyName
 import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
 
@@ -40,13 +42,17 @@ enum class Role {
  * @property profilePictureUrl URL yang menunjuk ke foto profil pengguna.
  */
 data class User(
-    val uid: String,
-    val name: String,
-    val email: String,
-    val password: String? = null,
-    val role: Role,
+    val uid: String = "",
+    val name: String = "",
+    val email: String = "",
+    @get:Exclude val password: String? = null,
+    val role: Role = Role.PASIEN,
     val phoneNumber: String = "N/A",
     val gender: Gender = Gender.PRIA,
     val dateOfBirth: String = "N/A",
     val profilePictureUrl: String = ""
-)
+){
+    @PropertyName("password")
+    @get:Exclude
+    private val passwordForFirestore: String? = password
+}

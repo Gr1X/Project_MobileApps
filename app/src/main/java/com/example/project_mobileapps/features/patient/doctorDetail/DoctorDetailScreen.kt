@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.example.project_mobileapps.R
-import com.example.project_mobileapps.data.local.DailyScheduleData
+import com.example.project_mobileapps.data.model.DailyScheduleData
 import com.example.project_mobileapps.ui.components.CircularBackButton
 import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
 import com.example.project_mobileapps.ui.themes.TextSecondary

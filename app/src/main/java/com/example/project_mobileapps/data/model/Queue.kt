@@ -1,5 +1,7 @@
 package com.example.project_mobileapps.data.model
 
+import com.google.firebase.firestore.DocumentId
+import com.google.firebase.firestore.PropertyName
 import java.util.Date
 
 /**
@@ -36,22 +38,25 @@ enum class QueueStatus {
  * @property hasBeenLate Flag untuk menandai apakah pasien ini pernah terlambat merespon panggilan.
  */
 data class QueueItem(
-    val queueNumber: Int,
-    val userId: String,
-    val userName: String,
-    val doctorId: String,
-    val keluhan: String,
+    @DocumentId
+    val id: String = "",
+    val queueNumber: Int = 0,
+    val userId: String = "",
+    val userName: String = "",
+    val doctorId: String = "",
+    val keluhan: String = "",
     var status: QueueStatus = QueueStatus.MENUNGGU,
     val createdAt: Date = Date(),
     var calledAt: Date? = null,
     var startedAt: Date? = null,
     var finishedAt: Date? = null,
+    @get:PropertyName("hasBeenLate")
+    @set:PropertyName("hasBeenLate")
     var hasBeenLate: Boolean = false
 )
 
 /**
  * Menyimpan state atau status keseluruhan dari praktik dokter pada hari berjalan.
- *
  * @property doctorId ID dokter yang memiliki status praktik ini.
  * @property doctorName Nama dokter, disimpan untuk kemudahan display.
  * @property currentServingNumber Nomor antrian pasien yang saat ini sedang dilayani (status DILAYANI). Bernilai 0 jika tidak ada.
@@ -64,16 +69,19 @@ data class QueueItem(
  * @property closingHour Jam tutup praktik (format 24 jam).
  * @property patientCallTimeLimitMinutes Batas waktu toleransi (dalam menit) bagi pasien untuk hadir setelah dipanggil.
  */
+
 data class PracticeStatus(
-    val doctorId: String,
-    val doctorName: String,
+    val doctorId: String = "",
+    val doctorName: String = "",
     var currentServingNumber: Int = 0,
     var lastQueueNumber: Int = 0,
     val dailyPatientLimit: Int = 50,
     val estimatedServiceTimeInMinutes: Int = 30,
-    val isPracticeOpen: Boolean = false,
+    @get:PropertyName("isPracticeOpen")
+    @set:PropertyName("isPracticeOpen")
+    var isPracticeOpen: Boolean = false,
     var totalServed: Int = 0,
-    val openingHour: Int = 9,
-    val closingHour: Int = 17,
+    val openingHour: Int = 8,
+    val closingHour: Int = 22,
     val patientCallTimeLimitMinutes: Int = 15
 )

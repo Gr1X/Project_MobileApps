@@ -10,6 +10,9 @@ import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.model.User
 import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.data.repo.QueueRepository
+import com.example.project_mobileapps.di.AppContainer
+import com.example.project_mobileapps.ui.components.ToastManager
+import com.example.project_mobileapps.ui.components.ToastType
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -67,6 +70,8 @@ class AdminQueueMonitorViewModel(
     // A private mutable state flow to hold the currently selected filter status.
     private val _selectedFilter = MutableStateFlow<QueueStatus?>(null)
 
+    private val clinicId = AppContainer.CLINIC_ID
+
     /**
      * The main public UI state flow.
      * It uses `combine` to reactively merge data from three different flows: the daily queue,
@@ -105,7 +110,7 @@ class AdminQueueMonitorViewModel(
             totalWaitingCount = waitingCount,
             fullQueueList = filteredList,
             selectedFilter = selectedFilter,
-            practiceStatus = statuses["doc_123"]
+            practiceStatus = statuses[clinicId]
         )
     }.stateIn(
         scope = viewModelScope,
@@ -116,9 +121,26 @@ class AdminQueueMonitorViewModel(
     /** Triggers the repository to call the next patient in the queue. */
     fun callNextPatient(context: Context) {
         viewModelScope.launch {
-            val result = queueRepository.callNextPatient("doc_123")
+            val result = queueRepository.callNextPatient(clinicId)
             if (result.isFailure) {
                 Toast.makeText(context, result.exceptionOrNull()?.message, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    /**
+     * Memproses hasil scan QR Code.
+     * Dipanggil dari UI ketika kamera mendeteksi kode QR valid.
+     */
+    fun processQrCode(qrContent: String, context: Context) {
+        viewModelScope.launch {
+            // Panggil fungsi khusus QR di repository
+            val result = queueRepository.confirmArrivalByQr(qrContent)
+
+            if (result.isSuccess) {
+                Toast.makeText(context, "Berhasil! Pasien telah dikonfirmasi hadir.", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(context, "Gagal: ${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -126,7 +148,7 @@ class AdminQueueMonitorViewModel(
     /** Confirms that a called patient has arrived at the examination room. */
     fun confirmPatientArrival(queueNumber: Int, context: Context) {
         viewModelScope.launch {
-            queueRepository.confirmPatientArrival(queueNumber, "doc_123")
+            queueRepository.confirmPatientArrival(queueNumber, clinicId)
             Toast.makeText(context, "Pasien No. $queueNumber hadir.", Toast.LENGTH_SHORT).show()
         }
     }
@@ -134,8 +156,16 @@ class AdminQueueMonitorViewModel(
     /** Marks a consultation as finished, moving the patient to the history. */
     fun finishConsultation(queueNumber: Int, context: Context) {
         viewModelScope.launch {
-            queueRepository.finishConsultation(queueNumber, "doc_123")
-            Toast.makeText(context, "Konsultasi No. $queueNumber selesai.", Toast.LENGTH_SHORT).show()
+            // Panggil fungsi di Repository (bukan nulis logic database di sini)
+            val result = queueRepository.finishConsultation(queueNumber, clinicId)
+
+            if (result.isSuccess) {
+                ToastManager.showToast("✅ Konsultasi No. $queueNumber selesai.", ToastType.SUCCESS)
+            } else {
+                val errorMsg = result.exceptionOrNull()?.message ?: "Gagal update data."
+                // JADI INI:
+                ToastManager.showToast(errorMsg, ToastType.ERROR)
+            }
         }
     }
 

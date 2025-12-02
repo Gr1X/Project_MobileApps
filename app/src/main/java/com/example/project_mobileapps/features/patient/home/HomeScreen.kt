@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -103,7 +104,9 @@ fun HomeScreen(
                 title = {  },
 
                 navigationIcon = {
-                    IconButton(onClick = onProfileClick) {
+                    IconButton(
+                        onClick = {onProfileClick},
+                    ) {
                         Icon(
                             imageVector = Icons.Filled.AccountCircle,
                             contentDescription = "Profil",
@@ -121,7 +124,15 @@ fun HomeScreen(
                             BadgedBox(
                                 badge = {
                                     if (hasUnreadNotifications) {
-                                        Badge { }
+                                        Badge(
+                                            // [MODIFIKASI 2]: Mengecilkan ukuran Badge
+                                            modifier = Modifier
+                                                .size(8.dp) // Ukuran badge (bisa diganti 6.dp jika ingin lebih kecil)
+                                                .offset(x = (-4).dp, y = (2).dp), // (Opsional) Menggeser posisi badge agar pas di dalam lingkaran
+                                            containerColor = MaterialTheme.colorScheme.error // Warna merah
+                                        ) {
+                                            // Kosongkan blok ini agar hanya berupa titik (dot)
+                                        }
                                     }
                                 }
                             ) {
@@ -229,6 +240,8 @@ fun HomeScreen(
             Spacer(Modifier.height(16.dp))
 
             if (uiState.doctor != null) {
+                Text("Appointment", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+
                 FeaturedDoctorCard(
                     doctor = uiState.doctor,
                     practiceStatus = uiState.practiceStatus,

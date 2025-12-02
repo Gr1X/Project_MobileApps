@@ -4,11 +4,12 @@ package com.example.project_mobileapps.features.doctor
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.project_mobileapps.data.local.DailyScheduleData
+import com.example.project_mobileapps.data.model.DailyScheduleData
 import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.data.repo.QueueRepository
+import com.example.project_mobileapps.di.AppContainer
 import com.example.project_mobileapps.features.admin.manageSchedule.PatientQueueDetails
 import kotlinx.coroutines.flow.*
 import java.util.Calendar
@@ -65,18 +66,16 @@ class DoctorViewModel(
         _selectedPatient
     ) { queues, statuses, doctorUser, selectedPatient ->
 
-        val doctorId = "doc_123"
+        val doctorId = AppContainer.CLINIC_ID
         val allUsers = authRepository.getAllUsers()
 
-        // --- LOGIKA BARU DIMULAI DI SINI ---
         val weeklySchedule = queueRepository.getDoctorSchedule(doctorId)
+        val practiceStatus = statuses[doctorId]
         val calendar = Calendar.getInstance()
         val dayOfWeekInt = calendar.get(Calendar.DAY_OF_WEEK) // Minggu=1, Senin=2, ..
         val dayMapping = listOf("Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu")
         val currentDayString = dayMapping[dayOfWeekInt - 1]
         val todaySchedule = weeklySchedule.find { it.dayOfWeek.equals(currentDayString, ignoreCase = true) }
-        // --- AKHIR LOGIKA BARU ---
-
         val activeQueues = queues
             .filter { it.doctorId == doctorId && (it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL || it.status == QueueStatus.DILAYANI) }
             .sortedBy { it.queueNumber }
@@ -91,7 +90,7 @@ class DoctorViewModel(
             greeting = getGreetingBasedOnTime(),
             doctorName = doctorUser?.name ?: "Dokter",
             topQueueList = topThreeQueues,
-            practiceStatus = statuses[doctorId],
+            practiceStatus = practiceStatus,
             isLoading = false,
             waitingInQueue = totalWaitingInQueue,
             nextQueueNumber = nextQueueNumberString,

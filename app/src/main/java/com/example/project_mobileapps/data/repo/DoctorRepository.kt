@@ -1,6 +1,8 @@
 package com.example.project_mobileapps.data.repo
 
 import com.example.project_mobileapps.data.model.Doctor
+import com.example.project_mobileapps.di.AppContainer
+
 /**
  * Repository yang mengelola data profil dokter.
  * Dalam implementasi ini, data dokter di-hardcode karena aplikasi
@@ -13,7 +15,7 @@ class DoctorRepository {
      * Ini adalah satu-satunya dokter yang digunakan di seluruh aplikasi.
      */
     private val theOnlyDoctor = Doctor(
-        id = "doc_123", // ID unik untuk dokter ini
+        id = AppContainer.CLINIC_ID, // ID unik untuk dokter ini
         name = "Dr. Budi Santoso",
         specialization = "Dokter Umum Klinik Pribadi",
         photoUrl = "",

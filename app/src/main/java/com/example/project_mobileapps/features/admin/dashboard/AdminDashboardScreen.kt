@@ -3,28 +3,21 @@
 package com.example.project_mobileapps.features.admin.dashboard
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.project_mobileapps.data.local.DailyScheduleData
+import com.example.project_mobileapps.data.model.DailyScheduleData
 import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.model.QueueItem
 import com.example.project_mobileapps.data.model.QueueStatus
@@ -255,6 +248,7 @@ fun AdminPatientInfoCard(item: QueueItem) {
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
+    var showScanner by remember { mutableStateOf(false) }
 
     Card(
         elevation = CardDefaults.cardElevation(if (cardBorder == null) 2.dp else 0.dp),

@@ -1,5 +1,7 @@
 package com.example.project_mobileapps.features.patient.home
 
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.project_mobileapps.data.model.Doctor
@@ -11,6 +13,8 @@ import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.data.repo.DoctorRepository
 import com.example.project_mobileapps.data.repo.NotificationRepository
 import com.example.project_mobileapps.data.repo.QueueRepository
+import com.example.project_mobileapps.di.AppContainer
+import com.example.project_mobileapps.utils.NotificationHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,12 +53,19 @@ data class HomeUiState(
 )
 
 class HomeViewModel (
+    application: Application,
     private val doctorRepository: DoctorRepository,
     private val authRepository: AuthRepository,
     private val queueRepository: QueueRepository
-) : ViewModel() {
+) : AndroidViewModel(application) {
+
+    private val context = application.applicationContext
+    private val clinicId = AppContainer.CLINIC_ID
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    private var hasNotifiedApproaching = false
+    private var lastQueueStatus: QueueStatus? = null
+
     /**
      * Blok inisialisasi. Dipanggil saat ViewModel dibuat.
      * Memulai pengambilan data utama dan pengamat notifikasi.
@@ -87,21 +98,19 @@ class HomeViewModel (
                 queueRepository.dailyQueuesFlow,
                 queueRepository.practiceStatusFlow
             ) { user, queues, statuses ->
-                val doctorId = "doc_123"
-                val practiceStatus = statuses[doctorId]
+                val practiceStatus = statuses[clinicId]
+                val upcoming = queues.filter {
+                    it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL || it.status == QueueStatus.DILAYANI
+                }
+                val totalNonCancelled = queues.count { it.status != QueueStatus.DIBATALKAN }
+                val slotsLeft = (practiceStatus?.dailyPatientLimit ?: 0) - totalNonCancelled
 
-                val upcoming = queues
-                    .filter { it.status == QueueStatus.MENUNGGU ||
-                            it.status == QueueStatus.DIPANGGIL ||
-                            it.status == QueueStatus.DILAYANI
-                    }
+                // Cari antrian saya yang aktif
+                val activeQueue = queues.find { it.userId == user?.uid && (it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL) }
 
-                val totalNonCancelledQueues = queues.count { it.status != QueueStatus.DIBATALKAN }
-                val slotsLeft = (practiceStatus?.dailyPatientLimit ?: 0) - totalNonCancelledQueues
-
-                val activeQueue = queues.find { it.userId == user?.uid && it.status == QueueStatus.MENUNGGU }
-                val currentlyServingPatient = queues
-                    .find { it.queueNumber == practiceStatus?.currentServingNumber && it.status == QueueStatus.DILAYANI }
+                val servingPatient = queues.find {
+                    it.queueNumber == practiceStatus?.currentServingNumber && it.status == QueueStatus.DILAYANI
+                }
 
                 _uiState.update {
                     it.copy(
@@ -111,7 +120,7 @@ class HomeViewModel (
                         activeQueue = activeQueue,
                         practiceStatus = practiceStatus,
                         upcomingQueue = upcoming,
-                        currentlyServingPatient = currentlyServingPatient,
+                        currentlyServingPatient = servingPatient,
                         availableSlots = slotsLeft.coerceAtLeast(0),
                         isLoading = false
                     )
@@ -119,9 +128,10 @@ class HomeViewModel (
             }.collect()
         }
 
+        // Loop cek telat (Background task)
         viewModelScope.launch {
             while (true) {
-                queueRepository.checkForLatePatients("doc_123")
+                queueRepository.checkForLatePatients(clinicId)
                 delay(10000L)
             }
         }
@@ -133,73 +143,60 @@ class HomeViewModel (
      */
     private fun observeQueueForNotifications() {
         viewModelScope.launch {
-            val combinedFlow = combine(
+            combine(
                 authRepository.currentUser,
                 queueRepository.dailyQueuesFlow,
                 queueRepository.practiceStatusFlow
-            ) { user, queues, statuses ->
-                Triple(user, queues, statuses)
-            }
+            ) { user, queues, statuses -> Triple(user, queues, statuses) }
+                .collect { (user, queues, statuses) ->
+                    val myId = user?.uid ?: return@collect
+                    val practiceStatus = statuses[clinicId] ?: return@collect
 
-            var previousState: Triple<User?, List<QueueItem>, Map<String, PracticeStatus>>? = null
+                    // Cari antrian saya
+                    val myQueue = queues.find { it.userId == myId && (it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL) }
 
-            combinedFlow.collect { currentState ->
-                if (previousState != null) {
-                    val (prevUser, prevQueues, prevStatuses) = previousState!!
-                    val (currentUser, currentQueues, currentStatuses) = currentState
+                    if (myQueue != null) {
 
-                    val myId = currentUser?.uid ?: return@collect
-                    val doctorId = "doc_123"
-                    val currentPracticeStatus = currentStatuses[doctorId]
-                    val prevPracticeStatus = prevStatuses[doctorId]
+                        // KASUS 1: DIPANGGIL (Status berubah dari MENUNGGU -> DIPANGGIL)
+                        if (myQueue.status == QueueStatus.DIPANGGIL && lastQueueStatus == QueueStatus.MENUNGGU) {
+                            NotificationHelper.showNotification(
+                                context,
+                                "Giliran Anda!",
+                                "Silakan masuk ke ruang periksa sekarang."
+                            )
+                            NotificationRepository.addNotification("Giliran Anda dipanggil.")
+                        }
 
-                    // 1. Notifikasi: Status Praktik Dokter Berubah
-                    if (prevPracticeStatus?.isPracticeOpen != currentPracticeStatus?.isPracticeOpen && currentPracticeStatus != null) {
-                        val statusText = if (currentPracticeStatus.isPracticeOpen) "dibuka" else "ditutup"
-                        NotificationRepository.addNotification("Praktik dokter saat ini telah $statusText.")
-                    }
+                        // KASUS 2: MENDEKATI GILIRAN (Tinggal 2 orang lagi)
+                        if (myQueue.status == QueueStatus.MENUNGGU) {
+                            val currentServing = practiceStatus.currentServingNumber
+                            // Hitung berapa orang di depan (Nomor Saya - Nomor Dilayani - 1)
+                            val peopleAhead = myQueue.queueNumber - currentServing
 
-                    // 2. Notifikasi: Berhasil Mengambil Antrian
-                    val newQueue = currentQueues.find { it.userId == myId && !prevQueues.any { prev -> prev.queueNumber == it.queueNumber } }
-                    newQueue?.let {
-                        NotificationRepository.addNotification("Anda berhasil mendapatkan nomor antrian ${it.queueNumber}.")
-                    }
+                            // Jika sisa 1 atau 2 orang, DAN belum pernah dikasih notif
+                            if (peopleAhead in 1..2 && !hasNotifiedApproaching) {
+                                val estimasi = peopleAhead * practiceStatus.estimatedServiceTimeInMinutes
+                                NotificationHelper.showNotification(
+                                    context,
+                                    "Segera Bersiap",
+                                    "Giliran Anda $peopleAhead antrian lagi (±$estimasi menit)."
+                                )
+                                NotificationRepository.addNotification("Giliran Anda segera tiba ($peopleAhead orang lagi).")
 
-                    // --- Logika Perbandingan Antrian Individual ---
-                    val myPreviousQueues = prevQueues.filter { it.userId == myId }
-                    myPreviousQueues.forEach { prevQueue ->
-                        val currentQueue = currentQueues.find { it.queueNumber == prevQueue.queueNumber }
-                        if (currentQueue != null) {
-                            // 3. Notifikasi: Antrian Dibatalkan
-                            if (prevQueue.status == QueueStatus.MENUNGGU && currentQueue.status == QueueStatus.DIBATALKAN) {
-                                NotificationRepository.addNotification("Nomor antrian ${currentQueue.queueNumber} telah dibatalkan.")
-                            }
-                            // 4. Notifikasi: Anda Dipanggil
-                            if (prevQueue.status == QueueStatus.MENUNGGU && currentQueue.status == QueueStatus.DIPANGGIL) {
-                                NotificationRepository.addNotification("Nomor antrian ${currentQueue.queueNumber} telah dipanggil. Segera menuju ruang periksa.")
+                                // Kunci agar tidak notif terus menerus
+                                hasNotifiedApproaching = true
                             }
                         }
-                    }
 
-                    // 5. NOTIFIKASI DIPERBAIKI: Giliran Anda Sudah Dekat
-                    val myCurrentWaitingQueue = currentQueues.find { it.userId == myId && it.status == QueueStatus.MENUNGGU }
-                    // Hanya jalankan jika semua data yang dibutuhkan ada (antrian saya, status praktik sekarang & sebelumnya)
-                    if (myCurrentWaitingQueue != null && currentPracticeStatus != null && prevPracticeStatus != null) {
-                        val currentServing = currentPracticeStatus.currentServingNumber
-                        val peopleAhead = myCurrentWaitingQueue.queueNumber - currentServing
+                        // Update tracker status terakhir
+                        lastQueueStatus = myQueue.status
 
-                        val prevServing = prevPracticeStatus.currentServingNumber
-                        val prevPeopleAhead = myCurrentWaitingQueue.queueNumber - prevServing
-
-                        // Kondisi ini sekarang akan berjalan dengan data yang dijamin akurat
-                        if (peopleAhead == 2 && prevPeopleAhead > 2) {
-                            val estimatedTime = 2 * currentPracticeStatus.estimatedServiceTimeInMinutes
-                            NotificationRepository.addNotification("Giliran Anda 2 antrian lagi (sekitar $estimatedTime menit). Harap bersiap.")
-                        }
+                    } else {
+                        // Reset jika antrian selesai/hilang
+                        hasNotifiedApproaching = false
+                        lastQueueStatus = null
                     }
                 }
-                previousState = currentState
-            }
         }
     }
 }

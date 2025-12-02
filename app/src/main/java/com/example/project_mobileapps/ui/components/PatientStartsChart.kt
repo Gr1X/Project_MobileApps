@@ -18,7 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.project_mobileapps.data.local.DailyReport
+import com.example.project_mobileapps.data.model.DailyReport
 /**
  * Composable reusable untuk menampilkan grafik batang (bar chart)
  * data laporan pasien (misal: jumlah pasien per hari).

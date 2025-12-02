@@ -70,4 +70,25 @@ dependencies {
     implementation(libs.retrofit.core)
     implementation(libs.retrofit.converter.moshi)
     implementation(libs.moshi.kotlin)
+
+    // TAMBAHKAN BARIS INI
+    testImplementation(libs.junit)
+
+    // Anda sudah punya 2 baris ini dari perbaikan sebelumnya
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+
+    val cameraxVersion = "1.3.0"
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
+
+    // 2. ML Kit Barcode Scanning (Untuk membaca QR)
+    implementation("com.google.mlkit:barcode-scanning:17.2.0")
+
+    // 3. ZXing (Untuk membuat/generate gambar QR)
+    implementation("com.google.zxing:core:3.5.1")
+
+    // 4. Accompanist Permissions (Opsional, tapi sangat memudahkan handling permission di Compose)
+    implementation("com.google.accompanist:accompanist-permissions:0.32.0")
 }

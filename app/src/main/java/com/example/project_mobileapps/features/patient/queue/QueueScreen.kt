@@ -1,6 +1,7 @@
 package com.example.project_mobileapps.features.patient.queue
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -18,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -29,6 +31,7 @@ import com.example.project_mobileapps.ui.components.CircularBackButton
 import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
 import com.example.project_mobileapps.ui.components.QueueChip
 import com.example.project_mobileapps.ui.themes.TextSecondary
+import com.example.project_mobileapps.utils.QrCodeGenerator
 import kotlinx.coroutines.delay
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -49,6 +52,15 @@ fun QueueScreen(
 ) {
     val uiState by queueViewModel.uiState.collectAsState()
     var showCancelSheet by remember { mutableStateOf(false) }
+
+    val qrBitmap = remember(uiState.myQueueItem?.id) {
+        val id = uiState.myQueueItem?.id
+        if (!id.isNullOrEmpty()) {
+            QrCodeGenerator.generateQrBitmap(id)?.asImageBitmap()
+        } else {
+            null
+        }
+    }
 
     // ✅ 1. State variable to hold the real-time timer value
     var displayedWaitTime by remember { mutableStateOf(uiState.estimatedWaitTime) }
@@ -108,6 +120,15 @@ fun QueueScreen(
                 onTakeQueue = onNavigateToTakeQueue,
                 onCancelQueue = { showCancelSheet = true }
             )
+
+            // UI Tampil QR
+            if (uiState.myQueueItem != null && qrBitmap != null) {
+                val status = uiState.myQueueItem!!.status
+                if (status == QueueStatus.MENUNGGU || status == QueueStatus.DIPANGGIL) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    PatientQrCard(bitmap = qrBitmap)
+                }
+            }
 
             if (uiState.myQueueItem?.status == QueueStatus.MENUNGGU) {
                 StatCard(uiState = uiState, displayedWaitTime = displayedWaitTime)
@@ -233,6 +254,50 @@ private fun QueueInfoCard(
         }
     }
 }
+
+@Composable
+fun PatientQrCard(bitmap: androidx.compose.ui.graphics.ImageBitmap) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "Scan untuk Kehadiran",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            // Gambar QR
+            Image(
+                bitmap = bitmap,
+                contentDescription = "QR Code Antrian",
+                modifier = Modifier
+                    .size(200.dp) // Ukuran QR Code
+                    .aspectRatio(1f)
+            )
+
+            Text(
+                text = "Tunjukkan QR Code ini kepada petugas saat nama Anda dipanggil.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+
+
 /**
  * Composable helper (private) untuk Timer Hitung Mundur (15 menit).
  * Digunakan saat status [QueueStatus.DIPANGGIL].

@@ -1,56 +1,54 @@
-// File BARU: ui/components/CustomToast.kt
-
+// File: ui/components/CustomToast.kt
 package com.example.project_mobileapps.ui.components
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Error
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-/**
- * Enum untuk mendefinisikan tipe-tipe pesan Toast yang didukung.
- * Mempengaruhi warna dan ikon yang ditampilkan.
- */
-// 1. Definisikan tipe-tipe Toast
+
+// 1. Enum Tipe Toast
 enum class ToastType {
     SUCCESS,
-    ERROR
+    ERROR,
+    INFO
 }
 
-// 2. Buat data class untuk menampung pesan Toast
-/**
- * Data class untuk merepresentasikan satu pesan Toast.
- * @param message Teks pesan yang akan ditampilkan.
- * @param type Tipe Toast ([ToastType]), defaultnya [ToastType.SUCCESS].
- */
-data class ToastMessage(val message: String, val type: ToastType)
+// 2. Data Class Pesan
+data class ToastMessage(
+    val message: String,
+    val type: ToastType = ToastType.SUCCESS,
+    val id: Long = System.nanoTime()
+)
 
-// 3. Buat Manager (singleton) untuk mengontrol state Toast secara global
-/**
- * Singleton object (`ToastManager`) untuk mengelola state Toast secara global.
- * Komponen lain dapat memanggil `ToastManager.showToast()` dari mana saja
- * untuk menampilkan pesan. [MainActivity] akan mengamati `toastMessage`
- * dan menampilkan [CustomToast] Composable.
- */
+// 3. Toast Manager (Singleton)
 object ToastManager {
     private val _toastMessage = MutableStateFlow<ToastMessage?>(null)
     val toastMessage = _toastMessage.asStateFlow()
-    /**
-     * Fungsi untuk menampilkan Toast. Mengupdate [_toastMessage].
-     * @param message Pesan yang akan ditampilkan.
-     * @param type Tipe Toast ([ToastType]).
-     */
+
     fun showToast(message: String, type: ToastType = ToastType.SUCCESS) {
         _toastMessage.update { ToastMessage(message, type) }
     }
@@ -60,76 +58,109 @@ object ToastManager {
     }
 }
 
-// 4. Buat Composable untuk Tampilan UI Toast
-/**
- * Composable untuk menampilkan UI Toast kustom.
- * Toast ini muncul dari atas layar dengan animasi dan hilang otomatis.
- *
- * @param modifier Modifier untuk [AnimatedVisibility].
- * @param toastMessage Objek [ToastMessage] yang sedang aktif (atau null).
- * Diambil dari [ToastManager.toastMessage].
- * @param onDismiss Callback yang dipanggil saat Toast harus disembunyikan
- * (baik otomatis setelah delay, atau jika diperlukan aksi dismiss manual).
- */
+// 4. UI Composable yang Diimprovisasi
 @Composable
 fun CustomToast(
     modifier: Modifier = Modifier,
     toastMessage: ToastMessage?,
     onDismiss: () -> Unit
 ) {
-    val (backgroundColor, icon, iconColor) = when (toastMessage?.type) {
-        ToastType.SUCCESS -> Triple(Color(0xFFE8F5E9), Icons.Outlined.CheckCircle, Color(0xFF388E3C)) // Hijau
-        ToastType.ERROR -> Triple(MaterialTheme.colorScheme.errorContainer, Icons.Outlined.ErrorOutline, MaterialTheme.colorScheme.onErrorContainer) // Merah
-        null -> Triple(Color.Transparent, null, Color.Transparent)
-    }
-    /**
-     * [LaunchedEffect] ini berfungsi sebagai timer otomatis.
-     * `key1 = toastMessage` berarti efek ini akan dibatalkan dan dijalankan ulang
-     * setiap kali `toastMessage` berubah (dari null ke pesan, atau pesan ke pesan baru).
-     * Jika `toastMessage` tidak null, ia akan menunggu 3 detik (`delay(3000L)`)
-     * lalu memanggil `onDismiss` untuk menyembunyikan Toast.
-     */
-    // Efek untuk menyembunyikan Toast secara otomatis setelah beberapa detik
-    LaunchedEffect(toastMessage) {
+    // Timer Auto-Dismiss
+    LaunchedEffect(toastMessage?.id) {
         if (toastMessage != null) {
-            delay(3000L) // Tampilkan selama 3 detik
+            delay(4000) // Tampil selama 4 detik
             onDismiss()
         }
     }
-    /**
-     * [AnimatedVisibility] mengontrol kemunculan dan kehilangan Toast dengan animasi.
-     * `visible = toastMessage != null` berarti Composable di dalamnya hanya akan
-     * ada di composition tree jika ada pesan Toast.
-     * `enter` dan `exit` mendefinisikan animasi (fade in/out, slide up/down).
-     */
+
     AnimatedVisibility(
         visible = toastMessage != null,
-        enter = fadeIn() + slideInVertically(),
-        exit = fadeOut() + slideOutVertically(),
+        // Animasi Slide dari Atas + Fade
+        enter = slideInVertically(
+            initialOffsetY = { -it }, // Mulai dari atas layar
+            animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy) // Efek memantul sedikit
+        ) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
         modifier = modifier
+            .padding(top = 16.dp, start = 16.dp, end = 16.dp) // Margin aman dari status bar
+            .zIndex(100f) // Pastikan selalu di paling atas (z-index tinggi)
     ) {
-        toastMessage?.let {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                shape = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.cardElevation(4.dp),
-                colors = CardDefaults.cardColors(containerColor = backgroundColor)
+        toastMessage?.let { msg ->
+            // Konfigurasi Warna & Ikon berdasarkan Tipe
+            val (bgColor, contentColor, iconVec) = when (msg.type) {
+                ToastType.SUCCESS -> Triple(
+                    Color(0xFFE8F5E9), // Hijau Muda (Background)
+                    Color(0xFF1B5E20), // Hijau Tua (Teks/Ikon)
+                    Icons.Rounded.CheckCircle
+                )
+                ToastType.ERROR -> Triple(
+                    Color(0xFFFFEBEE), // Merah Muda
+                    Color(0xFFB71C1C), // Merah Tua
+                    Icons.Rounded.Error
+                )
+                ToastType.INFO -> Triple(
+                    Color(0xFFE3F2FD), // Biru Muda
+                    Color(0xFF0D47A1), // Biru Tua
+                    Icons.Rounded.Info
+                )
+            }
+
+            // Desain Kartu Kapsul
+            Surface(
+                shape = RoundedCornerShape(28.dp), // Bentuk Pill/Kapsul
+                color = bgColor,
+                contentColor = contentColor,
+                border = BorderStroke(1.dp, contentColor.copy(alpha = 0.1f)),
+                shadowElevation = 6.dp, // Bayangan agar melayang
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (icon != null) {
-                        Icon(imageVector = icon, contentDescription = null, tint = iconColor)
+                    // Ikon Status dalam Lingkaran Transparan
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(contentColor.copy(alpha = 0.1f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = iconVec,
+                            contentDescription = null,
+                            tint = contentColor,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    // Teks Pesan
                     Text(
-                        text = it.message,
-                        color = contentColorFor(backgroundColor),
-                        style = MaterialTheme.typography.bodyMedium
+                        text = msg.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = contentColor,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Tombol Tutup (X) Kecil
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Tutup",
+                            tint = contentColor.copy(alpha = 0.5f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
         }

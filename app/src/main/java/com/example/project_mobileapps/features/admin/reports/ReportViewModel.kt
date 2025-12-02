@@ -5,13 +5,14 @@ package com.example.project_mobileapps.features.admin.reports
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.project_mobileapps.data.local.DailyReport
+import com.example.project_mobileapps.data.model.DailyReport
 import com.example.project_mobileapps.data.model.QueueItem
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.model.User
 import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.data.repo.QueueRepository
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
@@ -74,7 +75,14 @@ class ReportViewModel(
     private val _selectedPeriod = MutableStateFlow(ReportPeriod.HARIAN)
     private val _selectedYear = MutableStateFlow(Calendar.getInstance().get(Calendar.YEAR))
     private val _selectedMonth = MutableStateFlow(Calendar.getInstance().get(Calendar.MONTH))
+    private val _allUsers = MutableStateFlow<List<User>>(emptyList())
 
+    init {
+        // Muat data semua user secara asynchronous saat inisialisasi ViewModel
+        viewModelScope.launch {
+            _allUsers.value = authRepository.getAllUsers()
+        }
+    }
     /**
      * StateFlow publik yang menggabungkan semua data mentah dan filter menjadi satu [ReportUiState].
      * Blok `combine` akan dieksekusi ulang setiap kali data antrian atau salah satu filter berubah,
@@ -84,9 +92,10 @@ class ReportViewModel(
         queueRepository.dailyQueuesFlow,
         _selectedPeriod,
         _selectedYear,
-        _selectedMonth
-    ) { allQueues, period, year, month ->
-        processReportData(allQueues, period, year, month)
+        _selectedMonth,
+        _allUsers
+    ) { allQueues, period, year, month, allUsers ->
+        processReportData(allQueues, period, year, month, allUsers)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -111,34 +120,47 @@ class ReportViewModel(
         queues: List<QueueItem>,
         period: ReportPeriod,
         year: Int,
-        month: Int
+        month: Int,
+        allUsers: List<User>
     ): ReportUiState {
         val calendar = Calendar.getInstance()
-        val allUsers = authRepository.getAllUsers()
 
         // --- Langkah 1: Tentukan Rentang Tanggal Berdasarkan Filter ---
         val (startDate, endDate) = when (period) {
             ReportPeriod.HARIAN -> {
                 calendar.firstDayOfWeek = Calendar.MONDAY
                 calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                calendar.set(Calendar.HOUR_OF_DAY, 0)
+                calendar.set(Calendar.MINUTE, 0)
+                calendar.set(Calendar.SECOND, 0)
                 val start = calendar.time
+
                 calendar.add(Calendar.DAY_OF_YEAR, 6)
+                calendar.set(Calendar.HOUR_OF_DAY, 23)
+                calendar.set(Calendar.MINUTE, 59)
+                calendar.set(Calendar.SECOND, 59)
                 val end = calendar.time
                 Pair(start, end)
             }
             ReportPeriod.MINGGUAN -> {
-                calendar.set(year, month, 1)
+                calendar.set(year, month, 1, 0, 0, 0)
                 val start = calendar.time
                 calendar.add(Calendar.MONTH, 1)
                 calendar.add(Calendar.DAY_OF_YEAR, -1)
+                calendar.set(Calendar.HOUR_OF_DAY, 23)
+                calendar.set(Calendar.MINUTE, 59)
+                calendar.set(Calendar.SECOND, 59)
                 val end = calendar.time
                 Pair(start, end)
             }
             ReportPeriod.BULANAN -> {
-                calendar.set(year, 0, 1)
+                calendar.set(year, 0, 1, 0, 0, 0)
                 val start = calendar.time
                 calendar.add(Calendar.YEAR, 1)
                 calendar.add(Calendar.DAY_OF_YEAR, -1)
+                calendar.set(Calendar.HOUR_OF_DAY, 23)
+                calendar.set(Calendar.MINUTE, 59)
+                calendar.set(Calendar.SECOND, 59)
                 val end = calendar.time
                 Pair(start, end)
             }
@@ -158,20 +180,27 @@ class ReportViewModel(
         val chartData = when (period) {
             ReportPeriod.HARIAN -> {
                 val dailyCounts = servedQueues.groupBy { Calendar.getInstance().apply { time = it.createdAt }.get(Calendar.DAY_OF_WEEK) }
-                listOf("Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab").mapIndexed { index, dayName ->
-                    DailyReport(dayName, dailyCounts[index + 1]?.size ?: 0)
+                val daysOfWeek = listOf(Calendar.MONDAY, Calendar.TUESDAY, Calendar.WEDNESDAY, Calendar.THURSDAY, Calendar.FRIDAY, Calendar.SATURDAY, Calendar.SUNDAY)
+                val dayNames = listOf("Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min")
+
+                daysOfWeek.mapIndexed { index, calendarDay ->
+                    DailyReport(dayNames[index], dailyCounts[calendarDay]?.size ?: 0)
                 }
             }
+
             ReportPeriod.MINGGUAN -> {
                 val weeklyCounts = servedQueues.groupBy { Calendar.getInstance().apply { time = it.createdAt }.get(Calendar.WEEK_OF_MONTH) }
                 (1..5).map { weekNum -> DailyReport("W$weekNum", weeklyCounts[weekNum]?.size ?: 0) }
             }
+
             ReportPeriod.BULANAN -> {
                 val monthlyCounts = servedQueues.groupBy { Calendar.getInstance().apply { time = it.createdAt }.get(Calendar.MONTH) }
-                uiState.value.availableMonths.mapIndexed { index, monthName ->
-                    DailyReport(monthName.take(3), monthlyCounts[index]?.size ?: 0)
+                val monthNames = listOf("Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des")
+                monthNames.mapIndexed { index, monthName ->
+                    DailyReport(monthName, monthlyCounts[index]?.size ?: 0)
                 }
             }
+
             ReportPeriod.TAHUNAN -> {
                 val yearlyCounts = servedQueues.groupBy { Calendar.getInstance().apply { time = it.createdAt }.get(Calendar.YEAR) }
                 yearlyCounts.map { DailyReport(it.key.toString(), it.value.size) }.sortedBy { it.day }
@@ -182,6 +211,12 @@ class ReportViewModel(
         val uniquePatientIds = filteredQueues.map { it.userId }.distinct()
         val uniquePatients = allUsers.filter { it.uid in uniquePatientIds }
 
+        val availableYears = if (queues.isNotEmpty()) {
+            queues.map { Calendar.getInstance().apply { time = it.createdAt }.get(Calendar.YEAR) }.distinct().sorted()
+        } else {
+            listOf(Calendar.getInstance().get(Calendar.YEAR))
+        }
+
         // --- Langkah 5: Buat Objek State Akhir ---
         return ReportUiState(
             isLoading = false,
@@ -191,8 +226,7 @@ class ReportViewModel(
             selectedPeriod = period,
             selectedYear = year,
             selectedMonth = month,
-            // Ekstrak daftar tahun yang tersedia dari data antrian untuk ditampilkan di dropdown.
-            availableYears = queues.map { Calendar.getInstance().apply { time = it.createdAt }.get(Calendar.YEAR) }.distinct().sorted()
+            availableYears = availableYears
         )
     }
 }
@@ -202,7 +236,7 @@ class ReportViewModel(
  */
 class ReportViewModelFactory(
     private val queueRepository: QueueRepository,
-    private val authRepository: AuthRepository // <-- Pastikan ini ada
+    private val authRepository: AuthRepository
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ReportViewModel::class.java)) {

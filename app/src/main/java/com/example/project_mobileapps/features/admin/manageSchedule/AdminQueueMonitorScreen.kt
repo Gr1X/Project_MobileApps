@@ -10,13 +10,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.ConfirmationNumber
 import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,22 +30,19 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.project_mobileapps.R
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.model.Role
-import com.example.project_mobileapps.features.doctor.DetailRow
 import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
-import com.example.project_mobileapps.ui.components.ConfirmationDialog
+import com.example.project_mobileapps.ui.components.QrScannerScreen
 import kotlinx.coroutines.delay
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
-/**
- * Sealed class untuk merepresentasikan berbagai jenis aksi konfirmasi yang dapat
- * memicu munculnya Bottom Sheet. Menggunakan sealed class membuat penanganan
- * setiap jenis aksi menjadi lebih aman (type-safe) dan terstruktur dalam `when` expression.
- */
 sealed class ConfirmationAction {
     data class Finish(val patient: PatientQueueDetails) : ConfirmationAction()
     data class Arrive(val patient: PatientQueueDetails) : ConfirmationAction()
@@ -53,27 +50,48 @@ sealed class ConfirmationAction {
     data class Cancel(val patient: PatientQueueDetails) : ConfirmationAction()
 }
 
-/**
- * Composable utama untuk layar pemantauan antrian.
- * Layar ini digunakan oleh Admin dan Dokter untuk melihat dan mengelola alur pasien secara real-time.
- *
- * @param viewModel ViewModel [AdminQueueMonitorViewModel] yang menyediakan state dan logika untuk layar ini.
- * @param currentUserRole Peran pengguna yang sedang login, digunakan untuk menampilkan/menyembunyikan aksi tertentu (misal: hanya dokter yang bisa menyelesaikan konsultasi).
- */
 @Composable
 fun AdminQueueMonitorScreen(
-    viewModel: AdminQueueMonitorViewModel, // <-- Tipe ViewModel diubah
+    viewModel: AdminQueueMonitorViewModel,
     currentUserRole: Role?
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    // State untuk mengelola dialog dan bottom sheet.
-    var patientToCancel by remember { mutableStateOf<PatientQueueDetails?>(null) }
+    var showScanner by remember { mutableStateOf(false) }
     var activeConfirmation by remember { mutableStateOf<ConfirmationAction?>(null) }
     var patientToView by remember { mutableStateOf<PatientQueueDetails?>(null) }
 
-    // Menampilkan ConfirmationBottomSheet secara kondisional berdasarkan state `activeConfirmation`.
+    // --- DIALOG SCANNER ---
+    if (showScanner) {
+        Dialog(
+            onDismissRequest = { showScanner = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+                QrScannerScreen(
+                    onQrCodeScanned = { scannedId ->
+                        showScanner = false
+                        viewModel.processQrCode(scannedId, context)
+                    }
+                )
+                IconButton(
+                    onClick = { showScanner = false },
+                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
+                ) {
+                    Icon(Icons.Default.Close, "Tutup", tint = Color.White)
+                }
+                Text(
+                    text = "Arahkan kamera ke QR Code Pasien",
+                    color = Color.White,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(32.dp),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+        }
+    }
+
+    // --- BOTTOM SHEET KONFIRMASI ---
     activeConfirmation?.let { action ->
         when (action) {
             is ConfirmationAction.Cancel -> {
@@ -95,7 +113,7 @@ fun AdminQueueMonitorScreen(
                         activeConfirmation = null
                     },
                     title = "Panggil Pasien Berikutnya?",
-                    text = "Anda akan memanggil pasien berikutnya dalam antrian. Pastikan ruang periksa sudah siap."
+                    text = "Anda akan memanggil pasien berikutnya dalam antrian."
                 )
             }
             is ConfirmationAction.Arrive -> {
@@ -106,7 +124,7 @@ fun AdminQueueMonitorScreen(
                         activeConfirmation = null
                     },
                     title = "Konfirmasi Kehadiran?",
-                    text = "Konfirmasi bahwa pasien No. ${action.patient.queueItem.queueNumber} (${action.patient.queueItem.userName}) telah hadir di ruang periksa."
+                    text = "Konfirmasi pasien No. ${action.patient.queueItem.queueNumber} telah hadir?"
                 )
             }
             is ConfirmationAction.Finish -> {
@@ -117,13 +135,13 @@ fun AdminQueueMonitorScreen(
                         activeConfirmation = null
                     },
                     title = "Selesaikan Konsultasi?",
-                    text = "Anda akan menyelesaikan sesi konsultasi untuk pasien No. ${action.patient.queueItem.queueNumber}. Tindakan ini tidak dapat diurungkan."
+                    text = "Selesaikan sesi konsultasi pasien No. ${action.patient.queueItem.queueNumber}?"
                 )
             }
         }
     }
 
-    // Menampilkan BottomSheet detail pasien jika `patientToView` tidak null.
+    // --- BOTTOM SHEET DETAIL PASIEN ---
     if (patientToView != null) {
         PatientDetailBottomSheet(
             patientDetails = patientToView!!,
@@ -135,66 +153,74 @@ fun AdminQueueMonitorScreen(
         )
     }
 
-    // (Legacy Dialog - bisa dihapus jika tidak digunakan lagi, karena sudah digantikan BottomSheet)
-    if (patientToCancel != null) {
-        ConfirmationDialog(
-            onDismiss = { patientToCancel = null },
-            onConfirm = {
-                patientToCancel?.let { viewModel.cancelPatientQueue(it, context) }
-                patientToCancel = null
-            },
-            title = "Batalkan Antrian?",
-            text = "Anda yakin ingin membatalkan antrian untuk pasien '${patientToCancel?.queueItem?.userName}'?"
-        )
-    }
+    // --- MAIN UI ---
+    Scaffold(
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { showScanner = true },
+                icon = { Icon(Icons.Outlined.QrCodeScanner, contentDescription = null) },
+                text = { Text("Scan Kehadiran") },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
+        },
+        floatingActionButtonPosition = FabPosition.Center
+    ) { paddingValues ->
 
-    // Layout utama layar menggunakan LazyColumn untuk efisiensi.
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
-        item { TopStatsSection(uiState = uiState) }
-        item { MainActionSection(uiState = uiState, onAction = { activeConfirmation = it }, currentUserRole = currentUserRole) }
+        // HANYA ADA SATU LAZY COLUMN DI SINI
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues) // Penting agar tidak tertutup TopBar
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(bottom = 100.dp) // Extra padding bawah agar FAB tidak menutupi list
+        ) {
+            item { Spacer(modifier = Modifier.height(16.dp)) }
 
-        item {
-            Column {
-                Divider()
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Daftar Semua Antrian", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                FilterDropdownButton(
-                    options = uiState.filterOptions,
-                    selectedOption = uiState.selectedFilter,
-                    onOptionSelected = { viewModel.filterByStatus(it) }
-                )
-            }
-        }
+            // 1. Statistik Atas
+            item { TopStatsSection(uiState = uiState) }
 
-        // Menampilkan daftar antrian atau pesan jika kosong.
-        if (uiState.isLoading) {
-            item { CircularProgressIndicator(modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally)) }
-        } else if (uiState.fullQueueList.isEmpty()) {
+            // 2. Kartu Aksi Utama (Panggil/Layani)
+            item { MainActionSection(uiState = uiState, onAction = { activeConfirmation = it }, currentUserRole = currentUserRole) }
+
+            // 3. Filter & List Header
             item {
-                Box(modifier = Modifier.fillMaxSize().padding(top = 32.dp), contentAlignment = Alignment.Center) {
-                    Text("Tidak ada antrian untuk filter ini.")
+                Column {
+                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    Text("Daftar Semua Antrian", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FilterDropdownButton(
+                        options = uiState.filterOptions,
+                        selectedOption = uiState.selectedFilter,
+                        onOptionSelected = { viewModel.filterByStatus(it) }
+                    )
                 }
             }
-        } else {
-            items(uiState.fullQueueList, key = { it.queueItem.queueNumber }) { patientDetails ->
-                PatientQueueRow(
-                    patientDetails = patientDetails,
-                    onClick = { patientToView = patientDetails }
-                )
+
+            // 4. List Antrian
+            if (uiState.isLoading) {
+                item { CircularProgressIndicator(modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally)) }
+            } else if (uiState.fullQueueList.isEmpty()) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().padding(top = 32.dp), contentAlignment = Alignment.Center) {
+                        Text("Tidak ada antrian untuk filter ini.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            } else {
+                items(uiState.fullQueueList, key = { it.queueItem.id }) { patientDetails ->
+                    PatientQueueRow(
+                        patientDetails = patientDetails,
+                        onClick = { patientToView = patientDetails }
+                    )
+                }
             }
         }
     }
 }
 
-/**
- * Menampilkan 3 statistik utama di bagian atas layar: Sedang Dilayani, Total Antrian, dan Antrian Berikutnya.
- */
+// --- BAGIAN BAWAH TETAP SAMA (Components) ---
+
 @Composable
 fun TopStatsSection(uiState: DoctorQueueUiState) {
     Row(
@@ -210,49 +236,34 @@ fun TopStatsSection(uiState: DoctorQueueUiState) {
     }
 }
 
-/**
- * Kartu kecil yang dapat digunakan kembali untuk menampilkan satu metrik statistik.
- */
 @Composable
 fun SmallStatCard(label: String, value: String, icon: ImageVector, modifier: Modifier = Modifier) {
-    Card(modifier = modifier) {
+    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(12.dp).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(imageVector = icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(4.dp))
             Text(text = value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(text = label, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+            Text(text = label, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, lineHeight = 12.sp)
         }
     }
 }
 
-/**
- * Bagian UI yang paling dinamis, menampilkan kartu aksi utama yang berubah-ubah
- * sesuai dengan kondisi antrian saat ini.
- *
- * @param uiState State UI saat ini dari ViewModel.
- * @param onAction Callback untuk memicu aksi konfirmasi (misal: memanggil, konfirmasi hadir).
- * @param currentUserRole Peran pengguna yang login.
- */
 @Composable
 fun MainActionSection(
     uiState: DoctorQueueUiState,
     onAction: (ConfirmationAction) -> Unit,
     currentUserRole: Role?
 ) {
-    // Logika kondisional untuk menentukan kartu aksi mana yang harus ditampilkan.
     when {
-        // KONDISI 1: Ada pasien yang sedang dilayani. Tampilkan timer konsultasi.
         uiState.currentlyServing != null -> {
             PatientActionProfileCard(
                 title = "Sedang Melayani",
                 patientDetails = uiState.currentlyServing,
                 actionContent = {
                     var consultationTime by remember { mutableStateOf("00:00") }
-
-                    // LaunchedEffect untuk menjalankan timer stopwatch.
                     LaunchedEffect(uiState.currentlyServing.queueItem.startedAt) {
                         while (true) {
                             val diff = Date().time - (uiState.currentlyServing.queueItem.startedAt?.time ?: 0)
@@ -265,31 +276,23 @@ fun MainActionSection(
                     Text("Waktu Konsultasi:", style = MaterialTheme.typography.labelMedium)
                     Text(consultationTime, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
-
-                    // Tombol "Selesai" hanya muncul untuk Dokter.
                     if (currentUserRole == Role.DOKTER) {
                         Button(
                             onClick = { onAction(ConfirmationAction.Finish(uiState.currentlyServing)) },
                             modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Selesai Konsultasi")
-                        }
+                        ) { Text("Selesai Konsultasi") }
                     }
                 }
             )
         }
-
-        // KONDISI 2: Pasien sudah dipanggil, menunggu kedatangan. Tampilkan timer countdown.
         uiState.patientCalled != null -> {
             PatientActionProfileCard(
                 title = "Telah Dipanggil",
                 patientDetails = uiState.patientCalled,
                 actionContent = {
                     var timeRemaining by remember { mutableStateOf("01:00") }
-
-                    // LaunchedEffect untuk menjalankan timer countdown.
                     LaunchedEffect(uiState.patientCalled.queueItem.calledAt) {
-                        val deadline = (uiState.patientCalled.queueItem.calledAt?.time ?: 0) + (1 * 60 * 1000)
+                        val deadline = (uiState.patientCalled.queueItem.calledAt?.time ?: 0) + (15 * 60 * 1000) // 15 menit
                         while (true) {
                             val remaining = deadline - Date().time
                             if (remaining > 0) {
@@ -304,51 +307,35 @@ fun MainActionSection(
                         }
                     }
                     Text("Sisa Waktu Kedatangan:", style = MaterialTheme.typography.labelMedium)
-                    Text(timeRemaining, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                    Text(timeRemaining, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(8.dp))
-
                     Button(
-                        onClick = { onAction(ConfirmationAction.Arrive(uiState.patientCalled)) }, // Gunakan onAction
+                        onClick = { onAction(ConfirmationAction.Arrive(uiState.patientCalled)) },
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Pasien Hadir")
-                    }
+                    ) { Text("Pasien Hadir") }
                 }
             )
         }
-
-        // KONDISI 3: Siap memanggil pasien berikutnya. Tampilkan info pasien berikutnya dan tombol panggil.
         uiState.nextInLine != null -> {
             PatientActionProfileCard(
                 title = "Pasien Berikutnya",
                 patientDetails = uiState.nextInLine,
                 actionContent = {
                     Button(
-                        onClick = { onAction(ConfirmationAction.CallNext) }, // Gunakan onAction
+                        onClick = { onAction(ConfirmationAction.CallNext) },
                         modifier = Modifier.fillMaxWidth().height(50.dp)
-                    ) {
-                        Text("Panggil Pasien")
-                    }
+                    ) { Text("Panggil Pasien") }
                 }
             )
         }
-
-        // KONDISI 4: Tidak ada antrian sama sekali. Tampilkan pesan.
         else -> {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    "Semua antrian telah selesai.",
-                    modifier = Modifier.padding(32.dp).fillMaxWidth(),
-                    textAlign = TextAlign.Center
-                )
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))) {
+                Text("Tidak ada antrian menunggu.", modifier = Modifier.padding(24.dp).fillMaxWidth(), textAlign = TextAlign.Center)
             }
         }
     }
 }
 
-/**
- * Kartu reusable yang menampilkan profil pasien beserta slot untuk konten aksi (misal: tombol, timer).
- */
 @Composable
 fun PatientActionProfileCard(
     title: String,
@@ -357,19 +344,18 @@ fun PatientActionProfileCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(12.dp))
-
             ListItem(
                 headlineContent = { Text(patientDetails.queueItem.userName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) },
                 supportingContent = { Text("Keluhan: ${patientDetails.queueItem.keluhan}") },
                 leadingContent = {
                     AsyncImage(
                         model = patientDetails.user?.profilePictureUrl,
-                        contentDescription = "Foto Profil",
+                        contentDescription = null,
                         placeholder = painterResource(id = R.drawable.ic_launcher_foreground),
                         error = painterResource(id = R.drawable.ic_launcher_foreground),
                         contentScale = ContentScale.Crop,
@@ -378,183 +364,85 @@ fun PatientActionProfileCard(
                 },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent)
             )
-
             Divider(modifier = Modifier.padding(vertical = 12.dp))
-
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                content = actionContent
-            )
+            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, content = actionContent)
         }
     }
 }
 
-/**
- * Menampilkan satu baris data pasien dalam daftar antrian.
- */
 @Composable
-fun PatientQueueRow(
-    patientDetails: PatientQueueDetails,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+fun PatientQueueRow(patientDetails: PatientQueueDetails, onClick: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "No. ${patientDetails.queueItem.queueNumber}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = patientDetails.user?.name ?: patientDetails.queueItem.userName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Text("No. ${patientDetails.queueItem.queueNumber}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text(text = patientDetails.user?.name ?: patientDetails.queueItem.userName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
             StatusChip(status = patientDetails.queueItem.status)
         }
     }
 }
 
-/**
- * Chip yang dapat digunakan kembali untuk menampilkan status antrian dengan warna yang sesuai.
- */
 @Composable
 fun StatusChip(status: QueueStatus) {
-    val (text, color) = when (status) {
-        QueueStatus.MENUNGGU -> "Menunggu" to MaterialTheme.colorScheme.tertiaryContainer
-        QueueStatus.DIPANGGIL -> "Dipanggil" to Color(0xFFFFF9C4) // Kuning
-        QueueStatus.DILAYANI -> "Dilayani" to MaterialTheme.colorScheme.primaryContainer
-        QueueStatus.SELESAI -> "Selesai" to MaterialTheme.colorScheme.secondaryContainer
-        QueueStatus.DIBATALKAN -> "Batal" to MaterialTheme.colorScheme.errorContainer
+    val (text, color, textColor) = when (status) {
+        QueueStatus.MENUNGGU -> Triple("Menunggu", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
+        QueueStatus.DIPANGGIL -> Triple("Dipanggil", Color(0xFFFFF9C4), Color.Black)
+        QueueStatus.DILAYANI -> Triple("Dilayani", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+        QueueStatus.SELESAI -> Triple("Selesai", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+        QueueStatus.DIBATALKAN -> Triple("Batal", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
     }
-    Text(
-        text = text,
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(color) // Memberi warna latar belakang pada chip
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        style = MaterialTheme.typography.labelLarge
-    )
+    Text(text = text, modifier = Modifier.clip(CircleShape).background(color).padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelLarge, color = textColor)
 }
 
-/**
- * Tombol dropdown yang dapat digunakan kembali untuk memfilter daftar antrian berdasarkan status.
- */
 @Composable
-fun FilterDropdownButton(
-    options: List<QueueStatus>,
-    selectedOption: QueueStatus?,
-    onOptionSelected: (QueueStatus?) -> Unit
-) {
+fun FilterDropdownButton(options: List<QueueStatus>, selectedOption: QueueStatus?, onOptionSelected: (QueueStatus?) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val selectedText = selectedOption?.name?.lowercase()?.replaceFirstChar { it.titlecase() } ?: "Semua"
-
     Box {
-        OutlinedButton(
-            onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Text("Filter: $selectedText")
             Spacer(modifier = Modifier.weight(1f))
-            Icon(Icons.Default.ArrowDropDown, contentDescription = "Buka Filter")
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
         }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // Pilihan "Semua"
-            DropdownMenuItem(
-                text = { Text("Semua") },
-                onClick = {
-                    onOptionSelected(null)
-                    expanded = false
-                }
-            )
-            // Pilihan filter lainnya
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.fillMaxWidth()) {
+            DropdownMenuItem(text = { Text("Semua") }, onClick = { onOptionSelected(null); expanded = false })
             options.forEach { status ->
-                DropdownMenuItem(
-                    text = { Text(status.name.lowercase().replaceFirstChar { it.titlecase() }) },
-                    onClick = {
-                        onOptionSelected(status)
-                        expanded = false
-                    }
-                )
+                DropdownMenuItem(text = { Text(status.name.lowercase().replaceFirstChar { it.titlecase() }) }, onClick = { onOptionSelected(status); expanded = false })
             }
         }
     }
 }
 
-/**
- * Bottom sheet yang menampilkan detail lengkap seorang pasien.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PatientDetailBottomSheet(
-    patientDetails: PatientQueueDetails,
-    onDismiss: () -> Unit,
-    onCancelClick: () -> Unit // <-- Parameter baru
-) {
+fun PatientDetailBottomSheet(patientDetails: PatientQueueDetails, onDismiss: () -> Unit, onCancelClick: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
-        ) {
-            // Bagian Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    "Detail Pasien",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center
-                )
-            }
-
+        Column(modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
+            Text("Detail Pasien", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             Spacer(modifier = Modifier.height(24.dp))
-
-            // Detail Info
             DetailRow(label = "Nama Lengkap", value = patientDetails.user?.name ?: patientDetails.queueItem.userName)
             DetailRow(label = "Nomor Antrian", value = "#${patientDetails.queueItem.queueNumber}")
             DetailRow(label = "Keluhan Awal", value = patientDetails.queueItem.keluhan)
             Divider(modifier = Modifier.padding(vertical = 8.dp))
             DetailRow(label = "Nomor Telepon", value = patientDetails.user?.phoneNumber ?: "N/A")
-            DetailRow(label = "Email", value = patientDetails.user?.email ?: "N/A")
 
             Spacer(modifier = Modifier.height(24.dp))
-
-            // Tombol Aksi
-            // Hanya tampilkan tombol batal jika statusnya masih MENUNGGU atau DIPANGGIL
             if (patientDetails.queueItem.status == QueueStatus.MENUNGGU || patientDetails.queueItem.status == QueueStatus.DIPANGGIL) {
-                OutlinedButton(
-                    onClick = onCancelClick,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
-                ) {
+                OutlinedButton(onClick = onCancelClick, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error), border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))) {
                     Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Batalkan Antrian")
                 }
             }
         }
+    }
+}
+
+@Composable
+fun DetailRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
     }
 }

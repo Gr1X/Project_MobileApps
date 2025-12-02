@@ -5,8 +5,11 @@ import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.project_mobileapps.data.local.DailyScheduleData
+import com.example.project_mobileapps.data.model.DailyScheduleData
 import com.example.project_mobileapps.data.repo.QueueRepository
+import com.example.project_mobileapps.di.AppContainer
+import com.example.project_mobileapps.ui.components.ToastManager
+import com.example.project_mobileapps.ui.components.ToastType
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -37,6 +40,8 @@ data class PracticeScheduleUiState(
  * @property queueRepository Repository yang menyediakan dan menyimpan data jadwal.
  */
 class ManagePracticeScheduleViewModel(private val queueRepository: QueueRepository) : ViewModel() {
+
+    private val clinicId = AppContainer.CLINIC_ID
     // State internal untuk melacak status proses penyimpanan.
     private val _isSaving = MutableStateFlow(false)
     // State internal untuk menampung daftar jadwal yang sedang diedit oleh pengguna sebelum disimpan.
@@ -51,7 +56,7 @@ class ManagePracticeScheduleViewModel(private val queueRepository: QueueReposito
         _editedSchedules,
         _isSaving
     ) { statuses, schedules, isSaving ->
-        val practiceStatus = statuses["doc_123"]
+        val practiceStatus = statuses[clinicId]
         PracticeScheduleUiState(
             schedules = schedules,
             isLoading = false, // Loading selesai setelah _editedSchedules diisi.
@@ -79,7 +84,7 @@ class ManagePracticeScheduleViewModel(private val queueRepository: QueueReposito
     fun onCallTimeLimitChange(change: Int) {
         viewModelScope.launch {
             val newTime = (uiState.value.callTimeLimit + change).coerceIn(1, 60) // Batasi 1-60 menit
-            queueRepository.updatePatientCallTimeLimit("doc_123", newTime)
+            queueRepository.updatePatientCallTimeLimit(clinicId, newTime)
         }
     }
 
@@ -88,7 +93,7 @@ class ManagePracticeScheduleViewModel(private val queueRepository: QueueReposito
      */
     private fun loadSchedules() {
         viewModelScope.launch {
-            _editedSchedules.value = queueRepository.getDoctorSchedule("doc_123")
+            _editedSchedules.value = queueRepository.getDoctorSchedule(clinicId)
         }
     }
 
@@ -136,7 +141,7 @@ class ManagePracticeScheduleViewModel(private val queueRepository: QueueReposito
     fun onServiceTimeChange(change: Int) {
         viewModelScope.launch {
             val newTime = (uiState.value.estimatedServiceTime + change).coerceIn(5, 60)
-            queueRepository.updateEstimatedServiceTime("doc_123", newTime)
+            queueRepository.updateEstimatedServiceTime(clinicId, newTime)
         }
     }
 
@@ -144,14 +149,16 @@ class ManagePracticeScheduleViewModel(private val queueRepository: QueueReposito
      * Menyimpan semua perubahan jadwal yang ada di `_editedSchedules` ke repository.
      * Mengatur state `_isSaving` untuk memberikan feedback visual di UI.
      */
-    fun saveSchedule(context: Context) {
+    fun saveSchedule(context: Context) { // Context sebenarnya tidak butuh lagi, bisa dihapus dari parameter
         viewModelScope.launch {
             _isSaving.value = true
-            val result = queueRepository.updateDoctorSchedule("doc_123", _editedSchedules.value)
+            val result = queueRepository.updateDoctorSchedule(clinicId, _editedSchedules.value)
             if (result.isSuccess) {
-                Toast.makeText(context, "Jadwal berhasil disimpan!", Toast.LENGTH_SHORT).show()
+                // Ganti Toast.makeText(...)
+                ToastManager.showToast("Jadwal berhasil disimpan!", ToastType.SUCCESS)
             } else {
-                Toast.makeText(context, "Gagal menyimpan jadwal.", Toast.LENGTH_SHORT).show()
+                // Ganti Toast.makeText(...)
+                ToastManager.showToast("Gagal menyimpan jadwal.", ToastType.ERROR)
             }
             _isSaving.value = false
         }

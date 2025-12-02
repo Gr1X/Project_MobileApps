@@ -5,11 +5,12 @@ package com.example.project_mobileapps.features.admin.dashboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.project_mobileapps.data.local.DailyScheduleData
+import com.example.project_mobileapps.data.model.DailyScheduleData
 import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.model.QueueItem
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.repo.QueueRepository
+import com.example.project_mobileapps.di.AppContainer
 import kotlinx.coroutines.flow.*
 import java.util.Calendar
 
@@ -42,6 +43,8 @@ data class AdminDashboardUiState(
  */
 class AdminDashboardViewModel(private val queueRepository: QueueRepository) : ViewModel() {
 
+    private val clinicId = AppContainer.CLINIC_ID
+
     /**
      * StateFlow yang memancarkan [AdminDashboardUiState] terbaru ke UI.
      * Menggunakan `combine` untuk secara reaktif mengolah data dari `dailyQueuesFlow` dan `practiceStatusFlow`.
@@ -54,13 +57,15 @@ class AdminDashboardViewModel(private val queueRepository: QueueRepository) : Vi
     ) { queues, statuses ->
 
         val today = Calendar.getInstance()
-        val isSameDay = { d1: Calendar, d2: Calendar -> d1.get(Calendar.YEAR) == d2.get(Calendar.YEAR) && d1.get(Calendar.DAY_OF_YEAR) == d2.get(Calendar.DAY_OF_YEAR) }
+        val isSameDay = { d1: Calendar, d2: Calendar ->
+                d1.get(Calendar.YEAR) == d2.get(Calendar.YEAR)
+                && d1.get(Calendar.DAY_OF_YEAR) == d2.get(Calendar.DAY_OF_YEAR) }
         // Filter untuk hanya mengambil antrian yang dibuat pada hari ini.
         val queuesToday = queues.filter { val qd = Calendar.getInstance().apply { time = it.createdAt }; isSameDay(today, qd) }
 
         // Mengambil status dan jadwal praktik untuk dokter yang relevan.
-        val practiceStatus = statuses["doc_123"]
-        val weeklySchedule = queueRepository.getDoctorSchedule("doc_123")
+        val practiceStatus = statuses[clinicId]
+        val weeklySchedule = queueRepository.getDoctorSchedule(clinicId)
         val dayOfWeekInt = today.get(Calendar.DAY_OF_WEEK)
         val dayMapping = listOf("Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu")
         val currentDayString = dayMapping[dayOfWeekInt - 1]

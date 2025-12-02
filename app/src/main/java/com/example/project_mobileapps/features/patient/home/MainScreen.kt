@@ -1,34 +1,27 @@
+// File: features/patient/home/MainScreen.kt
 package com.example.project_mobileapps.features.patient.home
 
+import android.app.Application // Pastikan import ini ada
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext // Pastikan import ini ada
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.project_mobileapps.data.repo.AuthRepository
-import com.example.project_mobileapps.di.AppContainer
-import com.example.project_mobileapps.features.profile.ProfileScreen
 import com.example.project_mobileapps.features.patient.queue.QueueScreen
-import com.example.project_mobileapps.features.patient.queue.QueueViewModel
-import com.example.project_mobileapps.features.patient.queue.QueueViewModelFactory
+import com.example.project_mobileapps.features.profile.ProfileScreen
 import com.example.project_mobileapps.navigation.BottomNavItem
 import com.example.project_mobileapps.ui.components.BottomNavBar
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
-/**
- * Composable root untuk alur (flow) utama Pasien setelah login.
- * Layar ini mengatur [Scaffold] dengan [BottomNavBar] dan [NavHost]
- * untuk 3 tab utama: Home, Queue, dan Profile.
- *
- * @param rootNavController [NavHostController] utama dari aplikasi. Digunakan untuk
- * navigasi ke alur lain (seperti "doctorDetail", "news", atau "auth_flow" saat logout).
- */
+
 @Composable
 fun MainScreen(rootNavController: NavHostController) {
     val mainNavController = rememberNavController()
@@ -43,10 +36,15 @@ fun MainScreen(rootNavController: NavHostController) {
             modifier = Modifier.padding(innerPadding)
         ) {
 
+            // --- TAB HOME ---
             composable(BottomNavItem.Home.route) {
-                val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory())
+                // 1. Ambil Context & Application
+                val context = LocalContext.current
+                val application = context.applicationContext as Application
+
+                // 2. Pass 'application' ke Factory
+                val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory(application))
                 val uiState by homeViewModel.uiState.collectAsState()
-                val onlyDoctorId = uiState.doctor?.id ?: "doc_123"
 
                 HomeScreen(
                     uiState = uiState,
@@ -59,11 +57,16 @@ fun MainScreen(rootNavController: NavHostController) {
                     onNewsClick = { rootNavController.navigate("news") }
                 )
             }
-            /**
-             * Rute untuk Tab Antrian [BottomNavItem.Queue.route]
-             */
+
+            // --- TAB QUEUE (ANTRIAN) ---
             composable(BottomNavItem.Queue.route) {
-                val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory())
+                // PERBAIKAN DI SINI: Kita juga butuh HomeViewModel untuk mengambil ID Dokter
+                // Jadi kita harus ambil context & application lagi
+                val context = LocalContext.current
+                val application = context.applicationContext as Application
+
+                // Pass 'application' ke Factory (JANGAN KOSONG)
+                val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory(application))
                 val homeUiState by homeViewModel.uiState.collectAsState()
                 val onlyDoctorId = homeUiState.doctor?.id ?: "doc_123"
 
@@ -73,6 +76,7 @@ fun MainScreen(rootNavController: NavHostController) {
                 )
             }
 
+            // --- TAB PROFILE ---
             composable(BottomNavItem.Profile.route) {
                 ProfileScreen(
                     rootNavController = rootNavController,

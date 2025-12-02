@@ -1,6 +1,7 @@
 package com.example.project_mobileapps.di
 
-import com.example.project_mobileapps.data.repo.DummyQueueRepository
+import com.example.project_mobileapps.data.repo.DoctorRepository
+import com.example.project_mobileapps.data.repo.FirestoreQueueRepository
 import com.example.project_mobileapps.data.repo.QueueRepository
 
 /**
@@ -12,10 +13,8 @@ import com.example.project_mobileapps.data.repo.QueueRepository
  * dan mempermudah penggantian implementasi di masa depan (misalnya, dari Dummy ke implementasi network).
  */
 object AppContainer {
-    /**
-     * Menyediakan instance singleton dari [QueueRepository].
-     * Saat ini, container ini diatur untuk menyediakan [DummyQueueRepository],
-     * yang ideal untuk pengembangan dan demonstrasi UI tanpa memerlukan backend sungguhan.
-     */
-    val queueRepository: QueueRepository = DummyQueueRepository
+    const val CLINIC_ID = "VmdA8nFNc05tBCDaF0ip"
+
+    val queueRepository: QueueRepository = FirestoreQueueRepository
+    val doctorRepository: DoctorRepository = DoctorRepository()
 }

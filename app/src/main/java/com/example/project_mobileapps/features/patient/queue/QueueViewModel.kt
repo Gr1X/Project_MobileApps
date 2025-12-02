@@ -3,12 +3,13 @@ package com.example.project_mobileapps.features.patient.queue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.project_mobileapps.data.local.DailyScheduleData
+import com.example.project_mobileapps.data.model.DailyScheduleData
 import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.model.QueueItem
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.data.repo.QueueRepository
+import com.example.project_mobileapps.di.AppContainer
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -65,7 +66,7 @@ class QueueViewModel(
                 Triple(queues, statuses, currentUser)
             }.collect { (queues, statuses, currentUser) ->
                 // Sekarang kita berada di dalam coroutine dan bisa memanggil fungsi suspend
-                val doctorId = "doc_123" // Asumsi dokter tunggal
+                val doctorId = AppContainer.CLINIC_ID // Asumsi dokter tunggal
                 val weeklySchedule = queueRepository.getDoctorSchedule(doctorId)
 
                 val calendar = Calendar.getInstance()
@@ -76,7 +77,7 @@ class QueueViewModel(
 
                 // Logika yang sudah ada sebelumnya
                 val myQueue = queues.find { it.userId == currentUser?.uid && it.status == QueueStatus.MENUNGGU }
-                val status = myQueue?.let { statuses[it.doctorId] } ?: statuses.values.firstOrNull()
+                val status = statuses[doctorId]
                 val totalNonCancelledQueues = queues.count { it.status != QueueStatus.DIBATALKAN }
                 val slotsLeft = (status?.dailyPatientLimit ?: 0) - totalNonCancelledQueues
                 val queuesAhead = if (myQueue != null && status != null) {
