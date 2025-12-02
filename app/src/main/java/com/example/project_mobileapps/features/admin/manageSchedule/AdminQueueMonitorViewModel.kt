@@ -119,11 +119,17 @@ class AdminQueueMonitorViewModel(
     )
 
     /** Triggers the repository to call the next patient in the queue. */
-    fun callNextPatient(context: Context) {
+    fun callNextPatient() { // Hapus parameter context
         viewModelScope.launch {
             val result = queueRepository.callNextPatient(clinicId)
-            if (result.isFailure) {
-                Toast.makeText(context, result.exceptionOrNull()?.message, Toast.LENGTH_SHORT).show()
+
+            if (result.isSuccess) {
+                // Tampilkan Toast Sukses (Hijau)
+                ToastManager.showToast("✅ Pasien berhasil dipanggil.", ToastType.SUCCESS)
+            } else {
+                // Tampilkan Toast Error (Merah) dengan pesan dari Exception
+                val errorMsg = result.exceptionOrNull()?.message ?: "Gagal memanggil pasien."
+                ToastManager.showToast(errorMsg, ToastType.ERROR)
             }
         }
     }
@@ -132,24 +138,35 @@ class AdminQueueMonitorViewModel(
      * Memproses hasil scan QR Code.
      * Dipanggil dari UI ketika kamera mendeteksi kode QR valid.
      */
-    fun processQrCode(qrContent: String, context: Context) {
+    fun processQrCode(qrContent: String) { // Hapus parameter context
         viewModelScope.launch {
             // Panggil fungsi khusus QR di repository
             val result = queueRepository.confirmArrivalByQr(qrContent)
 
             if (result.isSuccess) {
-                Toast.makeText(context, "Berhasil! Pasien telah dikonfirmasi hadir.", Toast.LENGTH_LONG).show()
+                // Toast Sukses (Hijau)
+                ToastManager.showToast("✅ Berhasil! Pasien telah dikonfirmasi hadir.", ToastType.SUCCESS)
             } else {
-                Toast.makeText(context, "Gagal: ${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                // Toast Error (Merah)
+                val errorMsg = result.exceptionOrNull()?.message ?: "Gagal memproses QR Code."
+                ToastManager.showToast("❌ Gagal: $errorMsg", ToastType.ERROR)
             }
         }
     }
 
     /** Confirms that a called patient has arrived at the examination room. */
-    fun confirmPatientArrival(queueNumber: Int, context: Context) {
+    fun confirmPatientArrival(queueNumber: Int) { // Hapus parameter context
         viewModelScope.launch {
-            queueRepository.confirmPatientArrival(queueNumber, clinicId)
-            Toast.makeText(context, "Pasien No. $queueNumber hadir.", Toast.LENGTH_SHORT).show()
+            val result = queueRepository.confirmPatientArrival(queueNumber, clinicId)
+
+            if (result.isSuccess) {
+                // Tampilkan Toast Sukses (Hijau)
+                ToastManager.showToast("✅ Pasien No. $queueNumber hadir.", ToastType.SUCCESS)
+            } else {
+                // Tampilkan Toast Error (Merah)
+                val errorMsg = result.exceptionOrNull()?.message ?: "Gagal konfirmasi kehadiran."
+                ToastManager.showToast(errorMsg, ToastType.ERROR)
+            }
         }
     }
 
@@ -175,16 +192,23 @@ class AdminQueueMonitorViewModel(
     }
 
     /** Cancels a specific patient's queue item. */
-    fun cancelPatientQueue(patientDetails: PatientQueueDetails, context: Context) {
+    fun cancelPatientQueue(patientDetails: PatientQueueDetails) { // Hapus parameter context
         viewModelScope.launch {
             val result = queueRepository.cancelQueue(
                 userId = patientDetails.queueItem.userId,
                 doctorId = patientDetails.queueItem.doctorId
             )
+
             if (result.isSuccess) {
-                Toast.makeText(context, "Antrian No. ${patientDetails.queueItem.queueNumber} dibatalkan", Toast.LENGTH_SHORT).show()
+                // Toast Sukses (Hijau)
+                ToastManager.showToast(
+                    "✅ Antrian No. ${patientDetails.queueItem.queueNumber} dibatalkan",
+                    ToastType.SUCCESS
+                )
             } else {
-                Toast.makeText(context, "Gagal membatalkan antrian", Toast.LENGTH_SHORT).show()
+                // Toast Error (Merah)
+                val errorMsg = result.exceptionOrNull()?.message ?: "Gagal membatalkan antrian"
+                ToastManager.showToast(errorMsg, ToastType.ERROR)
             }
         }
     }

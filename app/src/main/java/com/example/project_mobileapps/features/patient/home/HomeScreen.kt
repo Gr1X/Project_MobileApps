@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.LocalPharmacy
 import androidx.compose.material.icons.outlined.Newspaper
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.RestaurantMenu
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -34,6 +35,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.project_mobileapps.data.model.PracticeStatus
@@ -137,7 +140,7 @@ fun HomeScreen(
                                 }
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Notifications,
+                                    imageVector = Icons.Outlined.Notifications,
                                     contentDescription = "Notifikasi"
                                 )
                             }
@@ -207,31 +210,40 @@ fun HomeScreen(
 
             Text(
                 text = "${uiState.greeting}, ${uiState.userName} 👋",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
 
             Text(
                 text = "How are you feeling today?",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Light
             )
 
             Spacer(Modifier.height(24.dp))
 
             val actionItems = listOf(
-                ActionItem("Berita Kesehatan", Icons.Outlined.Newspaper),
-                ActionItem("Lacak Makanan", Icons.Outlined.RestaurantMenu),
+                ActionItem("Booking", Icons.Outlined.LocalPharmacy),
+                ActionItem("News", Icons.Outlined.Newspaper),
+                ActionItem("Checking Diabetes", Icons.Outlined.RestaurantMenu),
             )
+
+            Text("Quick Actions", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
 
             ActionButtonsRow(
                 actions = actionItems,
-                // --- 3. UBAH AKSI TOMBOL DI SINI ---
                 onActionClick = { label ->
+                    // PERBAIKAN DI SINI: Samakan String dengan label di atas
                     when (label) {
-                        "Berita Kesehatan" -> onNewsClick()
-                        "Lacak Makanan" -> showMealPlanDialog = true // Panggil dialog
+                        "Booking" -> {
+                            // Masukkan aksi booking di sini, misal:
+                            onNavigateToQueue()
+                            // atau jika belum ada navigasi:
+                            // Toast.makeText(context, "Fitur Booking", Toast.LENGTH_SHORT).show()
+                        }
+                        "News" -> onNewsClick() // Ubah dari "Berita Kesehatan" jadi "News"
+                        "Checking Diabetes" -> showMealPlanDialog = true // Ubah dari "Lacak Makanan" jadi "Checking Diabetes"
                         else -> Toast.makeText(context, "$label diklik!", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -240,7 +252,7 @@ fun HomeScreen(
             Spacer(Modifier.height(16.dp))
 
             if (uiState.doctor != null) {
-                Text("Appointment", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("Appointment", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
 
                 FeaturedDoctorCard(
                     doctor = uiState.doctor,
@@ -329,7 +341,10 @@ private fun ActionButton(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick)
+        modifier = Modifier
+            .width(90.dp)
+            .clickable(onClick = onClick)
+            .clip(MaterialTheme.shapes.medium)
     ) {
         Box(
             modifier = Modifier
@@ -349,10 +364,17 @@ private fun ActionButton(
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
-
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 0.5.sp
+            ),
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center, // 2. Rata tengah (wajib untuk 2 baris)
+            maxLines = 2, // 3. Batasi maksimal 2 baris
+            minLines = 2, // 4. TRICK PENTING: Paksa minimal 2 baris agar tinggi semua tombol sama rata (sejajar)
+            overflow = TextOverflow.Ellipsis, // Jika lebih dari 2 baris, kasih titik-titik (...)
+            lineHeight = 14.sp // 5. Atur jarak antar baris agar tidak terlalu renggang
         )
     }
 }

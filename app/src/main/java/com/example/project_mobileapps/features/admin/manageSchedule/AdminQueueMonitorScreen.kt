@@ -72,7 +72,7 @@ fun AdminQueueMonitorScreen(
                 QrScannerScreen(
                     onQrCodeScanned = { scannedId ->
                         showScanner = false
-                        viewModel.processQrCode(scannedId, context)
+                        viewModel.processQrCode(scannedId)
                     }
                 )
                 IconButton(
@@ -98,7 +98,7 @@ fun AdminQueueMonitorScreen(
                 ConfirmationBottomSheet(
                     onDismiss = { activeConfirmation = null },
                     onConfirm = {
-                        viewModel.cancelPatientQueue(action.patient, context)
+                        viewModel.cancelPatientQueue(action.patient)
                         activeConfirmation = null
                     },
                     title = "Batalkan Antrian?",
@@ -109,7 +109,7 @@ fun AdminQueueMonitorScreen(
                 ConfirmationBottomSheet(
                     onDismiss = { activeConfirmation = null },
                     onConfirm = {
-                        viewModel.callNextPatient(context)
+                        viewModel.callNextPatient()
                         activeConfirmation = null
                     },
                     title = "Panggil Pasien Berikutnya?",
@@ -120,7 +120,7 @@ fun AdminQueueMonitorScreen(
                 ConfirmationBottomSheet(
                     onDismiss = { activeConfirmation = null },
                     onConfirm = {
-                        viewModel.confirmPatientArrival(action.patient.queueItem.queueNumber, context)
+                        viewModel.confirmPatientArrival(action.patient.queueItem.queueNumber)
                         activeConfirmation = null
                     },
                     title = "Konfirmasi Kehadiran?",

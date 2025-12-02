@@ -30,6 +30,8 @@ import com.example.project_mobileapps.di.AppContainer
 import com.example.project_mobileapps.ui.components.CircularBackButton
 import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
 import com.example.project_mobileapps.ui.components.QueueChip
+import com.example.project_mobileapps.ui.components.ToastManager
+import com.example.project_mobileapps.ui.components.ToastType
 import com.example.project_mobileapps.ui.themes.TextSecondary
 import com.example.project_mobileapps.utils.QrCodeGenerator
 import kotlinx.coroutines.delay
@@ -89,11 +91,14 @@ fun QueueScreen(
         ConfirmationBottomSheet(
             onDismiss = { showCancelSheet = false },
             onConfirm = {
+                // 1. Eksekusi Batal
                 queueViewModel.cancelMyQueue()
+                // 2. Feedback ke User
+                ToastManager.showToast("Permintaan pembatalan dikirim...", ToastType.INFO)
                 showCancelSheet = false
             },
-            title = "Konfirmasi Pembatalan",
-            text = "Apakah Anda yakin ingin membatalkan antrian ini? Tindakan ini tidak dapat diurungkan."
+            title = "Batalkan Antrian?",
+            text = "Apakah Anda yakin ingin membatalkan nomor antrian ini? Anda harus mendaftar ulang jika berubah pikiran."
         )
     }
 
@@ -242,7 +247,7 @@ private fun QueueInfoCard(
                         StopwatchTimer(startedAt = startedAt)
                     }
                 }
-                else -> { // null atau status lain
+                else -> {
                     Button(
                         onClick = onTakeQueue,
                         modifier = Modifier.fillMaxWidth().height(52.dp),

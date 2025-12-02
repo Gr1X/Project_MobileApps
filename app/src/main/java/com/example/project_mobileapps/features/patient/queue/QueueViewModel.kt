@@ -76,7 +76,10 @@ class QueueViewModel(
                 val todaySchedule = weeklySchedule.find { it.dayOfWeek.equals(currentDayString, ignoreCase = true) }
 
                 // Logika yang sudah ada sebelumnya
-                val myQueue = queues.find { it.userId == currentUser?.uid && it.status == QueueStatus.MENUNGGU }
+                val myQueue = queues.find {
+                    it.userId == currentUser?.uid &&
+                            (it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL || it.status == QueueStatus.DILAYANI)
+                }
                 val status = statuses[doctorId]
                 val totalNonCancelledQueues = queues.count { it.status != QueueStatus.DIBATALKAN }
                 val slotsLeft = (status?.dailyPatientLimit ?: 0) - totalNonCancelledQueues
