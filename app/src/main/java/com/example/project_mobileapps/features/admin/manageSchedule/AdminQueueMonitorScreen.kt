@@ -59,6 +59,9 @@ fun AdminQueueMonitorScreen(
     val context = LocalContext.current
 
     var showScanner by remember { mutableStateOf(false) }
+    // State baru untuk mencegah double scan
+    var isProcessingQr by remember { mutableStateOf(false) }
+
     var activeConfirmation by remember { mutableStateOf<ConfirmationAction?>(null) }
     var patientToView by remember { mutableStateOf<PatientQueueDetails?>(null) }
 
@@ -71,8 +74,13 @@ fun AdminQueueMonitorScreen(
             Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                 QrScannerScreen(
                     onQrCodeScanned = { scannedId ->
-                        showScanner = false
-                        viewModel.processQrCode(scannedId)
+                        // LOGIKA PENGUNCI (DEBOUNCE)
+                        // Hanya proses jika belum ada proses berjalan
+                        if (!isProcessingQr) {
+                            isProcessingQr = true // Kunci segera!
+                            showScanner = false   // Tutup dialog
+                            viewModel.processQrCode(scannedId)
+                        }
                     }
                 )
                 IconButton(
@@ -131,7 +139,7 @@ fun AdminQueueMonitorScreen(
                 ConfirmationBottomSheet(
                     onDismiss = { activeConfirmation = null },
                     onConfirm = {
-                        viewModel.finishConsultation(action.patient.queueItem.queueNumber, context)
+                        viewModel.finishConsultation(action.patient.queueItem.queueNumber)
                         activeConfirmation = null
                     },
                     title = "Selesaikan Konsultasi?",
@@ -157,7 +165,11 @@ fun AdminQueueMonitorScreen(
     Scaffold(
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { showScanner = true },
+                onClick = {
+                    // Saat membuka scanner, reset status pengunci agar bisa scan lagi
+                    isProcessingQr = false
+                    showScanner = true
+                },
                 icon = { Icon(Icons.Outlined.QrCodeScanner, contentDescription = null) },
                 text = { Text("Scan Kehadiran") },
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -171,10 +183,10 @@ fun AdminQueueMonitorScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues) // Penting agar tidak tertutup TopBar
+                .padding(paddingValues)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(bottom = 100.dp) // Extra padding bawah agar FAB tidak menutupi list
+            contentPadding = PaddingValues(bottom = 100.dp)
         ) {
             item { Spacer(modifier = Modifier.height(16.dp)) }
 

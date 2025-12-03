@@ -1,5 +1,6 @@
 package com.example.project_mobileapps.features.profile
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -23,21 +25,12 @@ import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.di.AppContainer
 import com.example.project_mobileapps.ui.components.CircularBackButton
 import com.example.project_mobileapps.ui.themes.TextSecondary
-/**
- * Composable untuk layar Riwayat Kunjungan.
- * Menampilkan daftar [HistoryItem] dalam [LazyColumn].
- * Mengelola state loading dan state kosong.
- *
- * @param onNavigateBack Callback untuk kembali ke layar sebelumnya.
- * @param onHistoryClick Callback yang dipanggil saat sebuah item riwayat diklik,
- * membawa data [HistoryItem] yang diklik.
- * @param viewModel ViewModel [HistoryViewModel] yang menyediakan data riwayat.
- */
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(
     onNavigateBack: () -> Unit,
-    onHistoryClick: (HistoryItem) -> Unit, // Parameter ini wajib ada
+    onHistoryClick: (HistoryItem) -> Unit,
     viewModel: HistoryViewModel = viewModel(
         factory = HistoryViewModelFactory(AppContainer.queueRepository, AuthRepository)
     )
@@ -66,122 +59,128 @@ fun HistoryScreen(
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // --- PERBAIKAN DI SINI ---
                     items(uiState.historyList) { historyItem ->
                         HistoryItemCard(
                             item = historyItem,
-                            onClick = { onHistoryClick(historyItem) } // Panggil lambda onHistoryClick
+                            onClick = { onHistoryClick(historyItem) }
                         )
                     }
-                    // --- AKHIR PERBAIKAN ---
                 }
             }
         }
     }
 }
-/**
- * Composable helper (private) untuk menampilkan satu kartu item riwayat.
- * @param item Data [HistoryItem] yang akan ditampilkan.
- * @param onClick Callback yang akan dipanggil saat kartu ini diklik.
- */
+
 @Composable
 private fun HistoryItemCard(
     item: HistoryItem,
-    onClick: () -> Unit // Parameter ini wajib ada
+    onClick: () -> Unit
 ) {
-    val (statusText, statusColor, statusTextColor) = when (item.status) {
-        QueueStatus.SELESAI -> Triple("Selesai", MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f), MaterialTheme.colorScheme.onSecondaryContainer)
-        QueueStatus.DIBATALKAN -> Triple("Dibatalkan", MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f), MaterialTheme.colorScheme.onErrorContainer)
-        else -> Triple(item.status.name, Color.Transparent, Color.Transparent)
+    // Tentukan warna berdasarkan status
+    val (statusText, statusBgColor, statusContentColor) = when (item.status) {
+        QueueStatus.SELESAI -> Triple("Selesai", Color(0xFFE8F5E9), Color(0xFF2E7D32)) // Hijau
+        QueueStatus.DIBATALKAN -> Triple("Dibatalkan", Color(0xFFFFEBEE), Color(0xFFC62828)) // Merah
+        else -> Triple(item.status.name, Color.Gray, Color.White)
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick), // Buat kartu bisa diklik
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Kolom Tanggal (Kiri)
             DateBlock(dateString = item.visitDate)
+
             Spacer(modifier = Modifier.width(16.dp))
+
+            // Kolom Info (Tengah)
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = item.doctorName, style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = "Keluhan: ${item.initialComplaint}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                Text(
+                    text = item.doctorName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(shape = RoundedCornerShape(16.dp), color = statusColor) {
-                    Text(
-                        text = statusText,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = statusTextColor,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                    )
-                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = item.initialComplaint,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary,
+                    maxLines = 1
+                )
+            }
+
+            // Status Chip (Kanan)
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = statusBgColor,
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = statusContentColor,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
             }
         }
     }
 }
-/**
- * Composable helper (private) untuk menampilkan blok tanggal yang diformat.
- * @param dateString String tanggal lengkap (misal: "18 Oktober 2025").
- */
+
 @Composable
 private fun DateBlock(dateString: String) {
+    // Parsing manual sederhana string tanggal (misal: "01 Des 2025")
+    // Mengambil "01" dan "DES"
     var day = ""
     var month = ""
 
-    if (dateString.isNotBlank()) {
-        val parts = dateString.split(" ")
-        if (parts.size >= 2) {
-            day = parts[0]
-            month = parts[1].take(3).uppercase()
-        }
-    }
+    val parts = dateString.split(" ")
+    if (parts.isNotEmpty()) day = parts[0]
+    if (parts.size > 1) month = parts[1].take(3).uppercase()
 
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+            .padding(8.dp)
+            .width(40.dp) // Lebar tetap agar rapi
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                .width(IntrinsicSize.Min),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(text = day, style = MaterialTheme.typography.titleLarge)
-            Text(text = month, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        Text(text = day, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(text = month, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
 private fun EmptyHistoryView() {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
             imageVector = Icons.Outlined.EventBusy,
-            contentDescription = "Tidak ada riwayat",
+            contentDescription = null,
             modifier = Modifier.size(80.dp),
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+            tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
         )
-        Spacer(modifier = Modifier.height(24.dp))
-        Text("Belum Ada Riwayat", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Belum Ada Riwayat", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text(
-            "Semua kunjungan Anda yang telah selesai akan tercatat di sini.",
+            "Kunjungan yang telah selesai akan muncul di sini.",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = TextSecondary
         )
     }
 }

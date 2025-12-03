@@ -1,6 +1,7 @@
 package com.example.project_mobileapps.features.patient.home
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -141,6 +142,8 @@ class HomeViewModel (
      * Fungsi ini membandingkan `currentState` dengan `previousState`
      * untuk mendeteksi perubahan spesifik.
      */
+    // ... import android.util.Log
+
     private fun observeQueueForNotifications() {
         viewModelScope.launch {
             combine(
@@ -152,13 +155,15 @@ class HomeViewModel (
                     val myId = user?.uid ?: return@collect
                     val practiceStatus = statuses[clinicId] ?: return@collect
 
-                    // Cari antrian saya
                     val myQueue = queues.find { it.userId == myId && (it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL) }
 
                     if (myQueue != null) {
+                        // LOG DEBUG LOGIKA
+                        Log.d("DEBUG_NOTIF", "Cek Logika - Status: ${myQueue.status}, LastStatus: $lastQueueStatus, HasNotified: $hasNotifiedApproaching")
 
-                        // KASUS 1: DIPANGGIL (Status berubah dari MENUNGGU -> DIPANGGIL)
+                        // KASUS 1: DIPANGGIL
                         if (myQueue.status == QueueStatus.DIPANGGIL && lastQueueStatus == QueueStatus.MENUNGGU) {
+                            Log.d("DEBUG_NOTIF", "👉 Trigger Notif: DIPANGGIL")
                             NotificationHelper.showNotification(
                                 context,
                                 "Giliran Anda!",
@@ -167,14 +172,15 @@ class HomeViewModel (
                             NotificationRepository.addNotification("Giliran Anda dipanggil.")
                         }
 
-                        // KASUS 2: MENDEKATI GILIRAN (Tinggal 2 orang lagi)
+                        // KASUS 2: MENDEKATI GILIRAN
                         if (myQueue.status == QueueStatus.MENUNGGU) {
                             val currentServing = practiceStatus.currentServingNumber
-                            // Hitung berapa orang di depan (Nomor Saya - Nomor Dilayani - 1)
                             val peopleAhead = myQueue.queueNumber - currentServing
 
-                            // Jika sisa 1 atau 2 orang, DAN belum pernah dikasih notif
+                            Log.d("DEBUG_NOTIF", "👉 Cek Antrian: Saya No ${myQueue.queueNumber}, Sekarang No $currentServing. Sisa di depan: $peopleAhead")
+
                             if (peopleAhead in 1..2 && !hasNotifiedApproaching) {
+                                Log.d("DEBUG_NOTIF", "👉 Trigger Notif: MENDEKATI")
                                 val estimasi = peopleAhead * practiceStatus.estimatedServiceTimeInMinutes
                                 NotificationHelper.showNotification(
                                     context,
@@ -182,17 +188,11 @@ class HomeViewModel (
                                     "Giliran Anda $peopleAhead antrian lagi (±$estimasi menit)."
                                 )
                                 NotificationRepository.addNotification("Giliran Anda segera tiba ($peopleAhead orang lagi).")
-
-                                // Kunci agar tidak notif terus menerus
                                 hasNotifiedApproaching = true
                             }
                         }
-
-                        // Update tracker status terakhir
                         lastQueueStatus = myQueue.status
-
                     } else {
-                        // Reset jika antrian selesai/hilang
                         hasNotifiedApproaching = false
                         lastQueueStatus = null
                     }

@@ -138,18 +138,14 @@ class AdminQueueMonitorViewModel(
      * Memproses hasil scan QR Code.
      * Dipanggil dari UI ketika kamera mendeteksi kode QR valid.
      */
-    fun processQrCode(qrContent: String) { // Hapus parameter context
+    fun processQrCode(qrContent: String) { // Context Dihapus
         viewModelScope.launch {
-            // Panggil fungsi khusus QR di repository
             val result = queueRepository.confirmArrivalByQr(qrContent)
-
             if (result.isSuccess) {
-                // Toast Sukses (Hijau)
-                ToastManager.showToast("✅ Berhasil! Pasien telah dikonfirmasi hadir.", ToastType.SUCCESS)
+                ToastManager.showToast("✅ Berhasil! Pasien hadir.", ToastType.SUCCESS)
             } else {
-                // Toast Error (Merah)
-                val errorMsg = result.exceptionOrNull()?.message ?: "Gagal memproses QR Code."
-                ToastManager.showToast("❌ Gagal: $errorMsg", ToastType.ERROR)
+                val msg = result.exceptionOrNull()?.message ?: "QR Invalid."
+                ToastManager.showToast("❌ Gagal: $msg", ToastType.ERROR)
             }
         }
     }
@@ -171,17 +167,14 @@ class AdminQueueMonitorViewModel(
     }
 
     /** Marks a consultation as finished, moving the patient to the history. */
-    fun finishConsultation(queueNumber: Int, context: Context) {
+    fun finishConsultation(queueNumber: Int) { // Context Dihapus
         viewModelScope.launch {
-            // Panggil fungsi di Repository (bukan nulis logic database di sini)
             val result = queueRepository.finishConsultation(queueNumber, clinicId)
-
             if (result.isSuccess) {
                 ToastManager.showToast("✅ Konsultasi No. $queueNumber selesai.", ToastType.SUCCESS)
             } else {
-                val errorMsg = result.exceptionOrNull()?.message ?: "Gagal update data."
-                // JADI INI:
-                ToastManager.showToast(errorMsg, ToastType.ERROR)
+                val msg = result.exceptionOrNull()?.message ?: "Gagal update data."
+                ToastManager.showToast("❌ Error: $msg", ToastType.ERROR)
             }
         }
     }
@@ -200,7 +193,6 @@ class AdminQueueMonitorViewModel(
             )
 
             if (result.isSuccess) {
-                // Toast Sukses (Hijau)
                 ToastManager.showToast(
                     "✅ Antrian No. ${patientDetails.queueItem.queueNumber} dibatalkan",
                     ToastType.SUCCESS
