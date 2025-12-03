@@ -208,6 +208,13 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 )
             }
 
+
+            composable("smart_meal_plan") {
+                com.example.project_mobileapps.features.patient.mealplan.SmartMealPlanScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
             // Layar daftar berita kesehatan.
             composable("news") {
                 NewsScreen(

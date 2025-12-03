@@ -54,6 +54,7 @@ fun MainScreen(rootNavController: NavHostController) {
                     onNavigateToQueue = { mainNavController.navigate(BottomNavItem.Queue.route) },
                     onTakeQueueClick = { mainNavController.navigate(BottomNavItem.Queue.route) },
                     onProfileClick = { mainNavController.navigate(BottomNavItem.Profile.route) },
+                    onSmartMealPlanClick = { rootNavController.navigate("smart_meal_plan") },
                     onNewsClick = { rootNavController.navigate("news") }
                 )
             }

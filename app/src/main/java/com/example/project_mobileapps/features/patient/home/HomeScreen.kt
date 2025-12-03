@@ -76,6 +76,7 @@ fun HomeScreen(
     onProfileClick: () -> Unit,
     onTakeQueueClick: () -> Unit,
     onNewsClick: () -> Unit,
+    onSmartMealPlanClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -226,7 +227,7 @@ fun HomeScreen(
             val actionItems = listOf(
                 ActionItem("Booking", Icons.Outlined.LocalPharmacy),
                 ActionItem("News", Icons.Outlined.Newspaper),
-                ActionItem("Checking Diabetes", Icons.Outlined.RestaurantMenu),
+                ActionItem("Smart Meal Plan", Icons.Outlined.RestaurantMenu)
             )
 
             Text("Quick Actions", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -243,7 +244,11 @@ fun HomeScreen(
                             // Toast.makeText(context, "Fitur Booking", Toast.LENGTH_SHORT).show()
                         }
                         "News" -> onNewsClick() // Ubah dari "Berita Kesehatan" jadi "News"
-                        "Checking Diabetes" -> showMealPlanDialog = true // Ubah dari "Lacak Makanan" jadi "Checking Diabetes"
+                        "Smart Meal Plan" -> {
+                            // Pastikan Anda mem-passing lambda navigasi untuk ini di parameter HomeScreen
+                            // Atau panggil langsung jika navController tersedia di scope ini (tapi best practice-nya via callback)
+                            onSmartMealPlanClick()
+                        }
                         else -> Toast.makeText(context, "$label diklik!", Toast.LENGTH_SHORT).show()
                     }
                 }

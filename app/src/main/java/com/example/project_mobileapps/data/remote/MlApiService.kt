@@ -9,19 +9,15 @@ import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.POST
 
-// 1. Setup Konverter JSON (Moshi)
 private val moshi = Moshi.Builder()
     .add(KotlinJsonAdapterFactory())
     .build()
 
-// 2. Setup Retrofit Instance
-// Base URL diambil dari server Railway Anda
 private val retrofitML = Retrofit.Builder()
     .baseUrl("https://diabetesmealplanpredictionapi-production-96e7.up.railway.app/")
     .addConverterFactory(MoshiConverterFactory.create(moshi))
     .build()
 
-// 3. Definisi Endpoint
 interface MlApiService {
     // Endpoint sesuai dokumentasi Swagger: /predict (POST)
     @POST("predict")

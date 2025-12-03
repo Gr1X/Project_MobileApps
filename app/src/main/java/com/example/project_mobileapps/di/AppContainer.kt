@@ -2,6 +2,7 @@ package com.example.project_mobileapps.di
 
 import com.example.project_mobileapps.data.repo.DoctorRepository
 import com.example.project_mobileapps.data.repo.FirestoreQueueRepository
+import com.example.project_mobileapps.data.repo.MealPlanRepository
 import com.example.project_mobileapps.data.repo.QueueRepository
 
 /**
@@ -17,4 +18,5 @@ object AppContainer {
 
     val queueRepository: QueueRepository = FirestoreQueueRepository
     val doctorRepository: DoctorRepository = DoctorRepository()
+    val mealPlanRepository = MealPlanRepository()
 }
