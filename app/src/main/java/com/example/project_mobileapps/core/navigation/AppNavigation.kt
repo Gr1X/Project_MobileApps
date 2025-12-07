@@ -184,7 +184,6 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 )
             ) { backStackEntry ->
                 val arguments = backStackEntry.arguments ?: return@composable
-                // Di sini, kita perlu men-decode kembali argumen yang telah di-encode sebelumnya.
                 val decoder = { arg: String -> URLDecoder.decode(arg, StandardCharsets.UTF_8.toString()) }
 
                 val visitId = decoder(arguments.getString("visitId", ""))

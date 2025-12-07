@@ -1,54 +1,58 @@
 package com.example.project_mobileapps.data.repo
 
+import android.app.Activity
 import android.util.Log
 import com.example.project_mobileapps.data.model.Gender
 import com.example.project_mobileapps.data.model.Role
 import com.example.project_mobileapps.data.model.User
-import com.example.project_mobileapps.di.AppContainer
+import com.google.firebase.FirebaseException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.PhoneAuthCredential
+import com.google.firebase.auth.PhoneAuthOptions
+import com.google.firebase.auth.PhoneAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.util.concurrent.TimeUnit
 
 /**
  * Singleton object yang bertindak sebagai Repository untuk autentikasi (Login, Logout, Register).
- * Ini adalah implementasi 'dummy' yang mengelola status login pengguna secara in-memory
- * dan menggunakan [DummyUserDatabase] sebagai sumber data.
  */
 object AuthRepository {
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
     private val usersCollection = firestore.collection("users")
 
-
     // Menyimpan user yang sedang login saat ini (MutableStateFlow internal)
     private val _currentUser = MutableStateFlow<User?>(null)
+
     /**
      * Aliran data reaktif (StateFlow) yang diekspos ke UI.
-     * UI akan mengamati ini untuk mengetahui siapa user yang sedang login.
-     * Bernilai `null` jika tidak ada yang login.
      */
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
 
     private val repoScope = CoroutineScope(Dispatchers.IO)
+
+    // --- VARIABEL UNTUK MENYIMPAN DATA OTP SEMENTARA ---
+    // Harus var (mutable) dan nullable agar bisa diisi saat kode terkirim
+    private var storedVerificationId: String? = null
+    private var resendToken: PhoneAuthProvider.ForceResendingToken? = null
 
     // Init block untuk memantau status login Firebase secara otomatis
     init {
         auth.addAuthStateListener { firebaseAuth ->
             val firebaseUser = firebaseAuth.currentUser
             if (firebaseUser != null) {
-                // Jika ada user Firebase login, ambil data lengkapnya dari Firestore
                 repoScope.launch {
                     fetchUserData(firebaseUser.uid)
                 }
             } else {
-                // Jika logout
                 _currentUser.value = null
             }
         }
@@ -66,27 +70,127 @@ object AuthRepository {
         }
     }
 
+    // --- FUNGSI BARU: GOOGLE LOGIN ---
+    suspend fun signInWithGoogle(idToken: String): Result<User> {
+        return try {
+            val credential = GoogleAuthProvider.getCredential(idToken, null)
+            val authResult = auth.signInWithCredential(credential).await()
+            val firebaseUser = authResult.user ?: throw Exception("Gagal autentikasi Google")
+
+            val docRef = usersCollection.document(firebaseUser.uid)
+            val snapshot = docRef.get().await()
+
+            if (snapshot.exists()) {
+                // User Lama
+                val existingUser = snapshot.toObject(User::class.java)!!
+                _currentUser.value = existingUser
+                Result.success(existingUser)
+            } else {
+                // User Baru
+                val newUser = User(
+                    uid = firebaseUser.uid,
+                    name = firebaseUser.displayName ?: "User Baru",
+                    email = firebaseUser.email ?: "",
+                    role = Role.PASIEN,
+                    profilePictureUrl = firebaseUser.photoUrl.toString(),
+                    phoneNumber = firebaseUser.phoneNumber ?: "N/A"
+                )
+                docRef.set(newUser).await()
+                _currentUser.value = newUser
+                Result.success(newUser)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // 1. FUNGSI KIRIM OTP
+    fun sendOtp(
+        phoneNumber: String,
+        activity: Activity,
+        onCodeSent: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+
+            override fun onVerificationCompleted(credential: PhoneAuthCredential) {
+                Log.d("AuthRepo", "onVerificationCompleted: $credential")
+            }
+
+            override fun onVerificationFailed(e: FirebaseException) {
+                Log.e("AuthRepo", "Gagal Kirim SMS", e)
+                onError(e.message ?: "Gagal mengirim SMS")
+            }
+
+            override fun onCodeSent(
+                verificationId: String,
+                token: PhoneAuthProvider.ForceResendingToken
+            ) {
+                Log.d("AuthRepo", "SMS Terkirim! ID: $verificationId")
+                // Simpan verificationId dan token ke variabel di object ini
+                storedVerificationId = verificationId
+                resendToken = token
+
+                // Panggil callback sukses
+                onCodeSent()
+            }
+        }
+
+        val options = PhoneAuthOptions.newBuilder(auth)
+            .setPhoneNumber(phoneNumber)
+            .setTimeout(60L, TimeUnit.SECONDS)
+            .setActivity(activity)
+            .setCallbacks(callbacks)
+            .build()
+        PhoneAuthProvider.verifyPhoneNumber(options)
+    }
+
+    // 2. FUNGSI VERIFIKASI KODE & LINK KE AKUN
+    suspend fun verifyOtp(code: String): Result<Unit> {
+        return try {
+            val verificationId = storedVerificationId ?: throw Exception("Terjadi kesalahan sistem (Verification ID null). Silakan kirim ulang kode.")
+
+            // Buat Credential dari kode
+            val credential = PhoneAuthProvider.getCredential(verificationId, code)
+
+            // Ambil user yang baru saja login (via Register Email/Pass)
+            val currentUser = auth.currentUser ?: throw Exception("User tidak ditemukan. Silakan login ulang.")
+
+            // Hubungkan No HP ke Akun Email tersebut
+            currentUser.linkWithCredential(credential).await()
+
+            // Opsional: Update status di Firestore
+            // usersCollection.document(currentUser.uid).update("isPhoneVerified", true).await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /**
      * Mensimulasikan proses login.
-     * @param email Email pengguna.
-     * @param password Password pengguna.
-     * @return [Result.success] berisi [User] jika login berhasil, [Result.failure] jika tidak.
      */
     suspend fun login(email: String, password: String): Result<User> {
         return try {
-            // 1. Login ke Firebase Auth
             val authResult = auth.signInWithEmailAndPassword(email, password).await()
             val uid = authResult.user?.uid ?: throw Exception("Gagal mendapatkan UID")
 
-            // 2. Ambil data detail dari Firestore
-            val snapshot = usersCollection.document(uid).get().await()
-            val user = snapshot.toObject(User::class.java)
+            fetchUserData(uid)
 
-            if (user != null) {
-                _currentUser.value = user
-                Result.success(user)
+            // Kita return user dari _currentUser jika sudah ter-fetch, atau coba fetch manual
+            if (_currentUser.value != null) {
+                Result.success(_currentUser.value!!)
             } else {
-                Result.failure(Exception("Data pengguna tidak ditemukan di Firestore."))
+                // Fallback fetch sync (bisa jadi race condition dgn init, tapi aman di sini)
+                val snapshot = usersCollection.document(uid).get().await()
+                val user = snapshot.toObject(User::class.java)
+                if (user != null) {
+                    _currentUser.value = user
+                    Result.success(user)
+                } else {
+                    Result.failure(Exception("Data pengguna tidak ditemukan."))
+                }
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -95,7 +199,6 @@ object AuthRepository {
 
     /**
      * Mensimulasikan proses logout.
-     * Mengatur [currentUser] kembali menjadi `null`.
      */
     suspend fun logout() {
         auth.signOut()
@@ -104,53 +207,42 @@ object AuthRepository {
 
     /**
      * Mensimulasikan proses registrasi pasien baru.
-     * @param name Nama lengkap.
-     * @param email Email baru.
-     * @param password Password baru (nullable, mungkin untuk login via Google).
-     * @param gender Jenis kelamin.
-     * @param dateOfBirth Tanggal lahir.
-     * @return [Result.success] berisi [User] baru jika berhasil, [Result.failure] jika email sudah terdaftar.
      */
     suspend fun register(
-        name: String,
-        email: String,
-        password: String? = null,
-        gender: Gender = Gender.PRIA,
-        dateOfBirth: String = "N/A",
-        phoneNumber: String = ""
-    ): Result<User> {
+        name: String, email: String, pass: String?,
+        gender: Gender = Gender.PRIA, dob: String = "N/A", phone: String = ""
+    ): Result<User> { // <--- KEMBALI KE USER
         return try {
-            if (password == null) throw Exception("Password diperlukan untuk registrasi email")
+            if (pass == null) throw Exception("Password required")
 
-            // 1. Buat akun di Firebase Auth
-            val authResult = auth.createUserWithEmailAndPassword(email, password).await()
-            val uid = authResult.user?.uid ?: throw Exception("Gagal membuat user")
+            // 1. Buat Akun
+            val authResult = auth.createUserWithEmailAndPassword(email, pass).await()
+            val firebaseUser = authResult.user ?: throw Exception("Gagal buat user")
 
-            // 2. Siapkan objek User untuk disimpan di Firestore
+            // 2. Buat Objek User
             val newUser = User(
-                uid = uid,
-                name = name,
-                email = email,
-                role = Role.PASIEN, // Default register adalah PASIEN
-                gender = gender,
-                dateOfBirth = dateOfBirth,
-                phoneNumber = phoneNumber
+                uid = firebaseUser.uid, name = name, email = email, role = Role.PASIEN,
+                gender = gender, dateOfBirth = dob, phoneNumber = phone
             )
 
-            // 3. Simpan ke Firestore
-            usersCollection.document(uid).set(newUser).await()
+            // 3. Simpan Data ke Firestore
+            usersCollection.document(firebaseUser.uid).set(newUser).await()
 
-            // 4. Update state lokal
-            _currentUser.value = newUser
+            // 4. KIRIM LINK VERIFIKASI
+            firebaseUser.sendEmailVerification().await()
+            Log.d("AuthRepo", "Email verifikasi terkirim ke $email")
+
+            // KEMBALIKAN OBJEK USER (Bukan Boolean)
             Result.success(newUser)
+
         } catch (e: Exception) {
+            Log.e("AuthRepo", "Gagal register", e)
             Result.failure(e)
         }
     }
 
     /**
-     * Mengambil semua pengguna dari database dummy.
-     * @return Daftar semua [User].
+     * Mengambil semua pengguna.
      */
     suspend fun getAllUsers(): List<User> {
         return try {
@@ -161,26 +253,49 @@ object AuthRepository {
         }
     }
 
+    suspend fun saveUserToFirestore(user: User): Result<Unit> {
+        return try {
+            usersCollection.document(user.uid).set(user).await()
+            // Setelah simpan ke DB, baru kita set state global currentUser
+            _currentUser.value = user
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+
+    suspend fun reloadUser(): User? {
+        return try {
+            val user = auth.currentUser
+            user?.reload()?.await() // Paksa refresh dari server Firebase
+
+            if (user != null && user.isEmailVerified) {
+                // Jika sudah verified, ambil data lengkap dari Firestore
+                fetchUserData(user.uid)
+                _currentUser.value
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /**
      * Mencari pengguna (pasien) berdasarkan nama.
-     * @param query Teks pencarian nama.
-     * @return Daftar [User] yang cocok dan memiliki role PASIEN.
      */
     suspend fun searchUsersByName(query: String): List<User> {
         return try {
-            // Catatan: Firestore search sederhana (case-sensitive biasanya).
-            // Untuk production yang lebih baik, perlu solusi text-search seperti Algolia,
-            // tapi untuk sekarang kita pakai query dasar.
             usersCollection
                 .whereGreaterThanOrEqualTo("name", query)
                 .whereLessThanOrEqualTo("name", query + "\uf8ff")
-                .whereEqualTo("role", Role.PASIEN.name) // Pastikan enum disimpan sebagai String di Firestore jika pakai .name
+                .whereEqualTo("role", Role.PASIEN.name)
                 .get()
                 .await()
                 .toObjects(User::class.java)
         } catch (e: Exception) {
-            // Fallback jika query di atas bermasalah karena index atau enum
-            // Ambil semua pasien lalu filter di client (TIDAK DISARANKAN UNTUK PRODUCTION BESAR)
+            // Fallback filter client side jika index belum siap
             getAllUsers().filter {
                 it.name.contains(query, ignoreCase = true) && it.role == Role.PASIEN
             }
@@ -188,19 +303,7 @@ object AuthRepository {
     }
 
     /**
-     * Fungsi *DEBUGGING* / *DEVELOPMENT* untuk berganti role (misal: dari Pasien ke Admin)
-     * tanpa perlu logout/login ulang.
-     * @param newRole Role target (ADMIN, DOKTER, PASIEN).
-     */
-    suspend fun switchUserRole(newRole: Role) {
-        // Opsional: Implementasi untuk debug, misalnya memaksa ubah role di state lokal saja
-        _currentUser.value = _currentUser.value?.copy(role = newRole)
-    }
-
-    /**
-     * Memperbarui data pengguna (misal: setelah edit profile).
-     * @param updatedUser Objek [User] dengan data yang sudah diperbarui.
-     * @return [Result.success] jika berhasil, [Result.failure] jika user tidak ditemukan.
+     * Memperbarui data pengguna.
      */
     suspend fun updateUser(updatedUser: User): Result<Unit> {
         return try {

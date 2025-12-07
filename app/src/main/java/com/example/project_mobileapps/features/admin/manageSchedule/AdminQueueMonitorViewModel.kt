@@ -167,14 +167,42 @@ class AdminQueueMonitorViewModel(
     }
 
     /** Marks a consultation as finished, moving the patient to the history. */
-    fun finishConsultation(queueNumber: Int) { // Context Dihapus
+//    fun finishConsultation(queueNumber: Int) { // Context Dihapus
+//        viewModelScope.launch {
+//            val result = queueRepository.finishConsultation(queueNumber, clinicId)
+//            if (result.isSuccess) {
+//                ToastManager.showToast("✅ Konsultasi No. $queueNumber selesai.", ToastType.SUCCESS)
+//            } else {
+//                val msg = result.exceptionOrNull()?.message ?: "Gagal update data."
+//                ToastManager.showToast("❌ Error: $msg", ToastType.ERROR)
+//            }
+//        }
+//    }
+
+    fun finishConsultationWithData(
+        queueNumber: Int,
+        diagnosis: String,
+        treatment: String,
+        prescription: String,
+        notes: String,
+        onSuccess: () -> Unit
+    ) {
         viewModelScope.launch {
-            val result = queueRepository.finishConsultation(queueNumber, clinicId)
+            val result = queueRepository.finishConsultation(
+                queueNumber = queueNumber,
+                doctorId = clinicId,
+                diagnosis = diagnosis,
+                treatment = treatment,
+                prescription = prescription,
+                notes = notes
+            )
+
             if (result.isSuccess) {
-                ToastManager.showToast("✅ Konsultasi No. $queueNumber selesai.", ToastType.SUCCESS)
+                ToastManager.showToast("✅ Rekam Medis tersimpan. Antrian selesai.", ToastType.SUCCESS)
+                onSuccess()
             } else {
-                val msg = result.exceptionOrNull()?.message ?: "Gagal update data."
-                ToastManager.showToast("❌ Error: $msg", ToastType.ERROR)
+                val msg = result.exceptionOrNull()?.message ?: "Gagal menyimpan."
+                ToastManager.showToast("❌ Gagal: $msg", ToastType.ERROR)
             }
         }
     }

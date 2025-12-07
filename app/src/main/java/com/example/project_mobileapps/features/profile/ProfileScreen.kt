@@ -133,23 +133,6 @@ fun ProfileScreen(
                             }
                         }
 
-                        // --- TAMBAHKAN ROLE SWITCHER DI SINI ---
-                        Spacer(modifier = Modifier.height(16.dp))
-                        RoleSwitcher(
-                            currentUserRole = uiState.user?.role,
-                            onRoleSelected = { newRole ->
-                                viewModel.switchRole(newRole)
-                                // Navigasi ke flow yang sesuai setelah role diganti
-                                val destination = when (newRole) {
-                                    Role.ADMIN -> "admin_flow"
-                                    Role.DOKTER -> "doctor_flow"
-                                    Role.PASIEN -> "main_flow"
-                                }
-                                rootNavController.navigate(destination) {
-                                    popUpTo(0) { inclusive = true }
-                                }
-                            }
-                        )
                         Spacer(modifier = Modifier.height(16.dp))
 
                         OutlinedButton(

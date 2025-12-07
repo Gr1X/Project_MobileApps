@@ -53,7 +53,9 @@ sealed class ConfirmationAction {
 @Composable
 fun AdminQueueMonitorScreen(
     viewModel: AdminQueueMonitorViewModel,
-    currentUserRole: Role?
+    currentUserRole: Role?,
+    onNavigateToHistory: (String) -> Unit,
+    onFinishConsultation: (Int, String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -139,11 +141,13 @@ fun AdminQueueMonitorScreen(
                 ConfirmationBottomSheet(
                     onDismiss = { activeConfirmation = null },
                     onConfirm = {
-                        viewModel.finishConsultation(action.patient.queueItem.queueNumber)
+                        val qNo = action.patient.queueItem.queueNumber
+                        val pName = action.patient.queueItem.userName
+                        onFinishConsultation(qNo, pName)
                         activeConfirmation = null
                     },
                     title = "Selesaikan Konsultasi?",
-                    text = "Selesaikan sesi konsultasi pasien No. ${action.patient.queueItem.queueNumber}?"
+                    text = "Anda akan diarahkan ke halaman pengisian Rekam Medis sebelum sesi berakhir."
                 )
             }
         }

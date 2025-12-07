@@ -1,19 +1,18 @@
+// File: features/patient/home/HomeViewModel.kt
 package com.example.project_mobileapps.features.patient.home
 
 import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.project_mobileapps.data.model.Doctor
 import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.model.QueueItem
 import com.example.project_mobileapps.data.model.QueueStatus
-import com.example.project_mobileapps.data.model.User
 import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.data.repo.DoctorRepository
-import com.example.project_mobileapps.data.repo.NotificationRepository
 import com.example.project_mobileapps.data.repo.QueueRepository
+import com.example.project_mobileapps.data.repo.NotificationRepository // Pastikan ada repository ini
 import com.example.project_mobileapps.di.AppContainer
 import com.example.project_mobileapps.utils.NotificationHelper
 import kotlinx.coroutines.delay
@@ -22,25 +21,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
-/**
- * Model data (UI State) untuk [HomeScreen].
- * Menggabungkan semua data yang diperlukan oleh UI Home Pasien.
- *
- * @property greeting Salam sapaan (misal: "Selamat Pagi").
- * @property userName Nama pengguna yang sedang login.
- * @property doctor Objek [Doctor] yang akan ditampilkan di kartu utama.
- * @property activeQueue Antrian [QueueItem] milik pengguna yang sedang aktif (status MENUNGGU).
- * @property practiceStatus Objek [PracticeStatus] dokter (buka/tutup, nomor saat ini, dll).
- * @property currentlyServingPatient Pasien [QueueItem] yang sedang dilayani saat ini.
- * @property upcomingQueue Daftar antrian yang akan datang (Menunggu, Dipanggil, Dilayani).
- * @property availableSlots Jumlah slot antrian yang masih tersisa untuk hari ini.
- * @property isLoading Menandakan apakah data awal sedang dimuat.
- */
+
 data class HomeUiState(
     val greeting: String = "Selamat Datang",
     val userName: String = "Pengguna",
@@ -53,31 +37,27 @@ data class HomeUiState(
     val isLoading: Boolean = true
 )
 
-class HomeViewModel (
+class HomeViewModel(
     application: Application,
     private val doctorRepository: DoctorRepository,
     private val authRepository: AuthRepository,
     private val queueRepository: QueueRepository
 ) : AndroidViewModel(application) {
 
-    private val context = application.applicationContext
+    private val context = getApplication<Application>().applicationContext
     private val clinicId = AppContainer.CLINIC_ID
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
-    private var hasNotifiedApproaching = false
-    private var lastQueueStatus: QueueStatus? = null
 
-    /**
-     * Blok inisialisasi. Dipanggil saat ViewModel dibuat.
-     * Memulai pengambilan data utama dan pengamat notifikasi.
-     */
+    // Variabel State untuk Mencegah Spam Notifikasi
+    private var lastNotifiedStatus: QueueStatus? = null
+    private var lastNotifiedQueueNumber: Int = -1
+
     init {
         fetchAllHomeData()
-        observeQueueForNotifications()
+        observeQueueForNotifications() // INI YANG PENTING
     }
-    /**
-     * Helper untuk memberikan sapaan berdasarkan jam.
-     */
+
     private fun getGreetingBasedOnTime(): String {
         val calendar = Calendar.getInstance()
         return when (calendar.get(Calendar.HOUR_OF_DAY)) {
@@ -87,11 +67,7 @@ class HomeViewModel (
             else -> "Selamat Malam"
         }
     }
-    /**
-     * Mengambil dan menggabungkan semua data yang diperlukan untuk Home Screen.
-     * Menggunakan `combine` untuk secara reaktif memperbarui [HomeUiState]
-     * setiap kali ada perubahan pada salah satu flow sumber.
-     */
+
     private fun fetchAllHomeData() {
         viewModelScope.launch {
             combine(
@@ -106,7 +82,6 @@ class HomeViewModel (
                 val totalNonCancelled = queues.count { it.status != QueueStatus.DIBATALKAN }
                 val slotsLeft = (practiceStatus?.dailyPatientLimit ?: 0) - totalNonCancelled
 
-                // Cari antrian saya yang aktif
                 val activeQueue = queues.find { it.userId == user?.uid && (it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL) }
 
                 val servingPatient = queues.find {
@@ -129,74 +104,92 @@ class HomeViewModel (
             }.collect()
         }
 
-        // Loop cek telat (Background task)
+        // Loop Background Check (Opsional jika ingin check late)
         viewModelScope.launch {
             while (true) {
                 queueRepository.checkForLatePatients(clinicId)
-                delay(10000L)
+                delay(30_000L) // Cek tiap 30 detik
             }
         }
     }
-    /**
-     * Mengamati perubahan state (user, antrian, status) untuk memicu notifikasi in-app.
-     * Fungsi ini membandingkan `currentState` dengan `previousState`
-     * untuk mendeteksi perubahan spesifik.
-     */
-    // ... import android.util.Log
 
+    // --- LOGIKA NOTIFIKASI (YANG DITANYAKAN) ---
     private fun observeQueueForNotifications() {
         viewModelScope.launch {
             combine(
                 authRepository.currentUser,
                 queueRepository.dailyQueuesFlow,
                 queueRepository.practiceStatusFlow
-            ) { user, queues, statuses -> Triple(user, queues, statuses) }
-                .collect { (user, queues, statuses) ->
-                    val myId = user?.uid ?: return@collect
-                    val practiceStatus = statuses[clinicId] ?: return@collect
+            ) { user, queues, statuses ->
+                Triple(user, queues, statuses)
+            }.collect { (user, queues, statuses) ->
 
-                    val myQueue = queues.find { it.userId == myId && (it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL) }
+                val myId = user?.uid ?: return@collect
+                val practiceStatus = statuses[clinicId] ?: return@collect
 
-                    if (myQueue != null) {
-                        // LOG DEBUG LOGIKA
-                        Log.d("DEBUG_NOTIF", "Cek Logika - Status: ${myQueue.status}, LastStatus: $lastQueueStatus, HasNotified: $hasNotifiedApproaching")
-
-                        // KASUS 1: DIPANGGIL
-                        if (myQueue.status == QueueStatus.DIPANGGIL && lastQueueStatus == QueueStatus.MENUNGGU) {
-                            Log.d("DEBUG_NOTIF", "👉 Trigger Notif: DIPANGGIL")
-                            NotificationHelper.showNotification(
-                                context,
-                                "Giliran Anda!",
-                                "Silakan masuk ke ruang periksa sekarang."
-                            )
-                            NotificationRepository.addNotification("Giliran Anda dipanggil.")
-                        }
-
-                        // KASUS 2: MENDEKATI GILIRAN
-                        if (myQueue.status == QueueStatus.MENUNGGU) {
-                            val currentServing = practiceStatus.currentServingNumber
-                            val peopleAhead = myQueue.queueNumber - currentServing
-
-                            Log.d("DEBUG_NOTIF", "👉 Cek Antrian: Saya No ${myQueue.queueNumber}, Sekarang No $currentServing. Sisa di depan: $peopleAhead")
-
-                            if (peopleAhead in 1..2 && !hasNotifiedApproaching) {
-                                Log.d("DEBUG_NOTIF", "👉 Trigger Notif: MENDEKATI")
-                                val estimasi = peopleAhead * practiceStatus.estimatedServiceTimeInMinutes
-                                NotificationHelper.showNotification(
-                                    context,
-                                    "Segera Bersiap",
-                                    "Giliran Anda $peopleAhead antrian lagi (±$estimasi menit)."
-                                )
-                                NotificationRepository.addNotification("Giliran Anda segera tiba ($peopleAhead orang lagi).")
-                                hasNotifiedApproaching = true
-                            }
-                        }
-                        lastQueueStatus = myQueue.status
-                    } else {
-                        hasNotifiedApproaching = false
-                        lastQueueStatus = null
-                    }
+                // Cari antrian SAYA yang aktif
+                val myQueue = queues.find {
+                    it.userId == myId && (it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL)
                 }
+
+                if (myQueue != null) {
+                    val currentServing = practiceStatus.currentServingNumber
+                    val myNumber = myQueue.queueNumber
+                    val peopleAhead = myNumber - currentServing
+
+                    Log.d("DEBUG_NOTIF", "Antrian Saya: No $myNumber, Status: ${myQueue.status}. Orang di depan: $peopleAhead")
+
+                    // KASUS 1: BARU SAJA DIPANGGIL
+                    if (myQueue.status == QueueStatus.DIPANGGIL && lastNotifiedStatus != QueueStatus.DIPANGGIL) {
+                        Log.d("DEBUG_NOTIF", "🚀 MENCOBA KIRIM NOTIF: DIPANGGIL")
+
+                        NotificationHelper.showNotification(
+                            context,
+                            "GILIRAN ANDA!",
+                            "Silakan masuk ke ruang periksa sekarang."
+                        )
+                        // Simpan log ke DB notifikasi internal (Dropdown Lonceng)
+                        NotificationRepository.addNotification("Giliran Anda dipanggil! Segera masuk.")
+
+                        // Update state agar tidak spam
+                        lastNotifiedStatus = QueueStatus.DIPANGGIL
+                    }
+
+                    // KASUS 2: MENDEKATI GILIRAN (3, 2, 1 orang lagi)
+                    // Cek: Apakah nomor yang dilayani berubah? Jika ya, cek apakah perlu notif?
+                    if (myQueue.status == QueueStatus.MENUNGGU && currentServing != lastNotifiedQueueNumber) {
+
+                        if (peopleAhead == 3) {
+                            Log.d("DEBUG_NOTIF", "🚀 MENCOBA KIRIM NOTIF: SISA 3")
+                            NotificationHelper.showNotification(context, "Siap-siap!", "Tersisa 3 antrian lagi.")
+                            NotificationRepository.addNotification("Tersisa 3 antrian lagi sebelum giliran Anda.")
+                            lastNotifiedQueueNumber = currentServing
+                        }
+                        else if (peopleAhead == 2) {
+                            Log.d("DEBUG_NOTIF", "🚀 MENCOBA KIRIM NOTIF: SISA 2")
+                            NotificationHelper.showNotification(context, "Mendekati Giliran", "Hanya 2 orang lagi.")
+                            NotificationRepository.addNotification("Tersisa 2 antrian lagi.")
+                            lastNotifiedQueueNumber = currentServing
+                        }
+                        else if (peopleAhead == 1) {
+                            Log.d("DEBUG_NOTIF", "🚀 MENCOBA KIRIM NOTIF: SISA 1")
+                            NotificationHelper.showNotification(context, "Segera Masuk", "Giliran Anda berikutnya!")
+                            NotificationRepository.addNotification("Giliran Anda berikutnya! Mohon bersiap.")
+                            lastNotifiedQueueNumber = currentServing
+                        }
+                    }
+
+                    // Reset status notifikasi DIPANGGIL jika status kembali ke MENUNGGU (misal dokter cancel panggil)
+                    if (myQueue.status == QueueStatus.MENUNGGU) {
+                        lastNotifiedStatus = QueueStatus.MENUNGGU
+                    }
+
+                } else {
+                    // Jika antrian selesai/batal, reset semua
+                    lastNotifiedStatus = null
+                    lastNotifiedQueueNumber = -1
+                }
+            }
         }
     }
 }

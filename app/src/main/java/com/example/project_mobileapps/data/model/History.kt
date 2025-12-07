@@ -17,5 +17,9 @@ data class HistoryItem(
     val doctorName: String,
     val visitDate: String,
     val initialComplaint: String,
-    val status: QueueStatus
+    val status: QueueStatus,
+    val diagnosis: String = "",
+    val treatment: String = "",
+    val prescription: String = "",
+    val doctorNotes: String = ""
 )

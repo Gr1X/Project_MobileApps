@@ -1,5 +1,4 @@
-// Salin dan ganti seluruh isi file: features/admin/AdminMainScreen.kt
-
+// File: features/admin/AdminMainScreen.kt
 package com.example.project_mobileapps.features.admin
 
 import androidx.compose.foundation.layout.padding
@@ -33,44 +32,34 @@ import com.example.project_mobileapps.features.admin.reports.PatientHistoryDetai
 import com.example.project_mobileapps.features.admin.reports.ReportScreen
 import com.example.project_mobileapps.features.admin.reports.ReportViewModel
 import com.example.project_mobileapps.features.admin.reports.ReportViewModelFactory
+import com.example.project_mobileapps.features.doctor.ConsultationInputScreen // Import Screen Baru
 import kotlinx.coroutines.launch
 
-/**
- * Composable utama yang menjadi container untuk seluruh alur (flow) Admin.
- * Screen ini mengatur Navigation Drawer, Top App Bar, dan NavHost untuk semua
- * layar yang diakses oleh admin.
- *
- * @param onLogoutClick Callback yang dieksekusi ketika admin menekan tombol logout.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminMainScreen(
     onLogoutClick: () -> Unit
 ) {
-    // State untuk mengontrol kondisi drawer (terbuka/tertutup).
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    // Coroutine scope untuk mengontrol drawer secara asynchronous (misal: membuka dan menutup drawer).
     val scope = rememberCoroutineScope()
-    // NavController khusus untuk navigasi di dalam alur admin (nested navigation).
     val adminNavController = rememberNavController()
-    // Mengamati back stack untuk mendapatkan rute yang sedang aktif.
     val navBackStackEntry by adminNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Logika untuk menyembunyikan Top App Bar utama pada layar detail tertentu
-    // yang memiliki Top App Bar-nya sendiri (misal: "Tambah Antrian Manual").
-    val showMainAppBar = currentRoute != "add_manual_queue" && currentRoute != "patient_history_detail/{patientId}"
+    // Sembunyikan App Bar di halaman-halaman tertentu
+    val showMainAppBar = currentRoute != "add_manual_queue" &&
+            (currentRoute?.startsWith("patient_history_detail") == false) &&
+            (currentRoute?.startsWith("consultation_input") == false)
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            // Menggunakan Composable terpisah untuk konten drawer agar kode tetap bersih.
             AdminDrawerContent(
                 currentRoute = currentRoute,
                 onNavigate = { route ->
                     adminNavController.navigate(route) {
-                        // Membersihkan back stack hingga ke tujuan awal untuk menghindari tumpukan layar.
-                        popUpTo(adminNavController.graph.startDestinationId) { this@navigate.launchSingleTop = true }
+                        popUpTo(adminNavController.graph.startDestinationId)
+                        launchSingleTop = true
                     }
                     scope.launch { drawerState.close() }
                 },
@@ -80,7 +69,6 @@ fun AdminMainScreen(
     ) {
         Scaffold(
             topBar = {
-                // Top App Bar utama hanya ditampilkan jika `showMainAppBar` bernilai true.
                 if (showMainAppBar) {
                     TopAppBar(
                         title = {},
@@ -93,7 +81,6 @@ fun AdminMainScreen(
                 }
             },
             floatingActionButton = {
-                // Floating Action Button (FAB) untuk menambah antrian hanya muncul di layar pemantauan.
                 if (currentRoute == AdminMenu.Monitoring.route) {
                     FloatingActionButton(onClick = { adminNavController.navigate("add_manual_queue") }) {
                         Icon(Icons.Default.Add, "Tambah Antrian Manual")
@@ -101,14 +88,12 @@ fun AdminMainScreen(
                 }
             }
         ) { innerPadding ->
-            // NavHost ini mengatur navigasi *di dalam* alur admin.
             NavHost(
                 navController = adminNavController,
                 startDestination = AdminMenu.Dashboard.route,
-                // --- PERUBAHAN 3: Gunakan padding hanya jika App Bar utama tampil ---
                 modifier = if (showMainAppBar) Modifier.padding(innerPadding) else Modifier
             ) {
-                // Layar Dashboard Admin
+                // 1. DASHBOARD
                 composable(AdminMenu.Dashboard.route) {
                     AdminDashboardScreen(
                         onNavigateToSchedule = { adminNavController.navigate(AdminMenu.Management.items[0].route) },
@@ -117,26 +102,37 @@ fun AdminMainScreen(
                     )
                 }
 
-                // Layar Pemantauan Antrian
+                // 2. MONITORING ANTRIAN (ERROR FIXED HERE)
                 composable(AdminMenu.Monitoring.route) {
                     val user by AuthRepository.currentUser.collectAsState()
                     val userRole = user?.role
                     val monitorViewModel: AdminQueueMonitorViewModel = viewModel(
                         factory = AdminQueueMonitorViewModelFactory(AppContainer.queueRepository, AuthRepository)
                     )
-                    AdminQueueMonitorScreen(viewModel = monitorViewModel, currentUserRole = userRole)
+
+                    AdminQueueMonitorScreen(
+                        viewModel = monitorViewModel,
+                        currentUserRole = userRole,
+                        // Tambahkan parameter navigasi yang hilang:
+                        onNavigateToHistory = { patientId ->
+                            adminNavController.navigate("patient_history_detail/$patientId")
+                        },
+                        onFinishConsultation = { qNo, pName ->
+                            adminNavController.navigate("consultation_input/$qNo/$pName")
+                        }
+                    )
                 }
 
-                // Layar Manajemen Jadwal
-                composable(AdminMenu.Management.items[0].route) { // "manage_schedule"
+                // 3. MANAJEMEN JADWAL
+                composable(AdminMenu.Management.items[0].route) {
                     val practiceViewModel: ManagePracticeScheduleViewModel = viewModel(
                         factory = ManagePracticeScheduleViewModelFactory(AppContainer.queueRepository)
                     )
                     ManagePracticeScheduleScreen(viewModel = practiceViewModel)
                 }
 
-                // Layar Laporan
-                composable(AdminMenu.Management.items[1].route) { // "reports"
+                // 4. LAPORAN
+                composable(AdminMenu.Management.items[1].route) {
                     val reportViewModel: ReportViewModel = viewModel(
                         factory = ReportViewModelFactory(AppContainer.queueRepository, AuthRepository)
                     )
@@ -148,13 +144,14 @@ fun AdminMainScreen(
                     )
                 }
 
-                // Layar Detail Riwayat Pasien (diakses dari layar Laporan)
+                // 5. MANUAL QUEUE
                 composable("add_manual_queue") {
                     AddManualQueueScreen(
                         onNavigateBack = { adminNavController.popBackStack() }
                     )
                 }
 
+                // 6. DETAIL HISTORY (VIEW ONLY)
                 composable(
                     route = "patient_history_detail/{patientId}",
                     arguments = listOf(navArgument("patientId") { type = NavType.StringType })
@@ -165,6 +162,28 @@ fun AdminMainScreen(
                     PatientHistoryDetailScreen(
                         viewModel = detailViewModel,
                         onNavigateBack = { adminNavController.popBackStack() }
+                    )
+                }
+
+                // 7. INPUT REKAM MEDIS (INPUT FORM)
+                composable(
+                    route = "consultation_input/{queueNumber}/{patientName}",
+                    arguments = listOf(
+                        navArgument("queueNumber") { type = NavType.IntType },
+                        navArgument("patientName") { type = NavType.StringType }
+                    )
+                ) { backStackEntry ->
+                    val qNo = backStackEntry.arguments?.getInt("queueNumber") ?: 0
+                    val pName = backStackEntry.arguments?.getString("patientName") ?: ""
+
+                    ConsultationInputScreen(
+                        queueNumber = qNo,
+                        patientName = pName,
+                        onNavigateBack = { adminNavController.popBackStack() },
+                        onConsultationFinished = {
+                            // Kembali ke monitor setelah selesai
+                            adminNavController.popBackStack(AdminMenu.Monitoring.route, false)
+                        }
                     )
                 }
             }

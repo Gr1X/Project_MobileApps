@@ -7,10 +7,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.project_mobileapps.core.navigation.DoctorMenu
 import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.di.AppContainer
@@ -92,7 +94,36 @@ fun DoctorMainScreen(
                     )
                     AdminQueueMonitorScreen(
                         viewModel = monitorViewModel,
-                        currentUserRole = userRole
+                        currentUserRole = userRole,
+                        onNavigateToHistory = { patientId ->
+                            doctorNavController.navigate("patient_history_detail/$patientId")
+                        },
+
+                        onFinishConsultation = { qNo, pName ->
+                            // Encode nama jika perlu, atau kirim langsung
+                            doctorNavController.navigate("consultation_input/$qNo/$pName")
+                        }
+                    )
+                }
+
+                composable(
+                    route = "consultation_input/{queueNumber}/{patientName}",
+                    arguments = listOf(
+                        navArgument("queueNumber") { type = NavType.IntType },
+                        navArgument("patientName") { type = NavType.StringType }
+                    )
+                ) { backStackEntry ->
+                    val qNo = backStackEntry.arguments?.getInt("queueNumber") ?: 0
+                    val pName = backStackEntry.arguments?.getString("patientName") ?: ""
+
+                    ConsultationInputScreen(
+                        queueNumber = qNo,
+                        patientName = pName,
+                        onNavigateBack = { doctorNavController.popBackStack() },
+                        onConsultationFinished = {
+                            // Kembali ke Queue Screen dan hapus history input
+                            doctorNavController.popBackStack(DoctorMenu.Queue.route, false)
+                        }
                     )
                 }
 

@@ -10,13 +10,10 @@ object QrCodeGenerator {
     fun generateQrBitmap(content: String, size: Int = 512): Bitmap? {
         return try {
             val writer = QRCodeWriter()
-            // Encode content menjadi matrix bit
             val bitMatrix = writer.encode(content, BarcodeFormat.QR_CODE, size, size)
             val width = bitMatrix.width
             val height = bitMatrix.height
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-
-            // Konversi bit matrix ke pixel bitmap (Hitam/Putih)
             for (x in 0 until width) {
                 for (y in 0 until height) {
                     bitmap.setPixel(x, y, if (bitMatrix[x, y]) Color.BLACK else Color.WHITE)

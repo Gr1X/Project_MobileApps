@@ -41,8 +41,6 @@ fun MainScreen(rootNavController: NavHostController) {
                 // 1. Ambil Context & Application
                 val context = LocalContext.current
                 val application = context.applicationContext as Application
-
-                // 2. Pass 'application' ke Factory
                 val homeViewModel: HomeViewModel = viewModel(factory = HomeViewModelFactory(application))
                 val uiState by homeViewModel.uiState.collectAsState()
 

@@ -119,9 +119,4 @@ class ProfileViewModel : ViewModel() {
      * Ini adalah fitur development untuk testing.
      * @param newRole Role baru yang akan di-login-kan.
      */
-    fun switchRole(newRole: Role) {
-        viewModelScope.launch {
-            AuthRepository.switchUserRole(newRole)
-        }
-    }
 }

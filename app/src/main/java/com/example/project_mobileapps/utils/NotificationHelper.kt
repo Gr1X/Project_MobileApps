@@ -6,66 +6,50 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.util.Log // Tambah Import Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import com.example.project_mobileapps.MainActivity
-import com.example.project_mobileapps.R
+import com.example.project_mobileapps.MainActivity // Ganti dengan Activity utama Anda
+import com.example.project_mobileapps.R // Pastikan import R benar
 
 object NotificationHelper {
-    private const val CHANNEL_ID = "antrian_channel_id"
+    private const val CHANNEL_ID = "queue_channel_id"
     private const val CHANNEL_NAME = "Update Antrian"
 
+    // Wajib dipanggil di onCreate MainActivity
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Notifikasi status antrian"
-                enableVibration(true)
+            val importance = NotificationManager.IMPORTANCE_HIGH // Agar bunyi dan muncul popup
+            val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
+                description = "Notifikasi status antrian pasien"
             }
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
-            Log.d("DEBUG_NOTIF", "Channel Notifikasi Dibuat")
+            val notificationManager: NotificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
         }
     }
 
-    fun showNotification(context: Context, title: String, message: String) {
-        Log.d("DEBUG_NOTIF", "Mencoba memunculkan notifikasi: $title - $message") // LOG PENTING
-
-        // Cek Izin Dulu (Khusus Android 13+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (androidx.core.content.ContextCompat.checkSelfPermission(
-                    context,
-                    android.Manifest.permission.POST_NOTIFICATIONS
-                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) {
-                Log.e("DEBUG_NOTIF", "❌ GAGAL: Izin POST_NOTIFICATIONS belum diberikan user!")
-                return
-            }
-        }
-
+    fun showNotification(context: Context, title: String, content: String) {
+        // Intent agar saat notif diklik, aplikasi terbuka
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
-        val pendingIntent = PendingIntent.getActivity(
+        val pendingIntent: PendingIntent = PendingIntent.getActivity(
             context, 0, intent, PendingIntent.FLAG_IMMUTABLE
         )
 
-        // GUNAKAN ICON BAWAAN ANDROID (Supaya pasti muncul)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_launcher_foreground) // Ganti dengan icon app Anda
             .setContentTitle(title)
-            .setContentText(message)
+            .setContentText(content)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
 
         try {
+            // ID unik (bisa random atau queueNumber) agar notif tidak saling menimpa jika mau history
             NotificationManagerCompat.from(context).notify(System.currentTimeMillis().toInt(), builder.build())
-            Log.d("DEBUG_NOTIF", "✅ SUKSES: Notifikasi dikirim ke sistem")
         } catch (e: SecurityException) {
-            Log.e("DEBUG_NOTIF", "❌ ERROR Security: ${e.message}")
-        } catch (e: Exception) {
-            Log.e("DEBUG_NOTIF", "❌ ERROR Lain: ${e.message}")
+            // Handle permission error for Android 13+ here if needed
         }
     }
 }

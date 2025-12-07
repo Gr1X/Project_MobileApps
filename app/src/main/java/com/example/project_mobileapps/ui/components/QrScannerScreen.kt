@@ -34,11 +34,8 @@ fun QrScannerScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-
-    // State untuk izin kamera
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
 
-    // Meminta izin saat layar dibuka
     LaunchedEffect(Unit) {
         cameraPermissionState.launchPermissionRequest()
     }
@@ -59,13 +56,10 @@ fun QrScannerScreen(
 
                     cameraProviderFuture.addListener({
                         val cameraProvider = cameraProviderFuture.get()
-
-                        // 1. Setup Preview (Tampilan Kamera)
                         val preview = Preview.Builder().build().also {
                             it.setSurfaceProvider(previewView.surfaceProvider)
                         }
 
-                        // 2. Setup Analyzer (Otak Pembaca QR)
                         val imageAnalysis = ImageAnalysis.Builder()
                             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                             .build()
@@ -79,9 +73,7 @@ fun QrScannerScreen(
                                 scanner.process(image)
                                     .addOnSuccessListener { barcodes ->
                                         for (barcode in barcodes) {
-                                            // Cek apakah barcode berisi teks/value
                                             barcode.rawValue?.let { qrContent ->
-                                                // Log untuk debug
                                                 Log.d("QRScanner", "Scanned: $qrContent")
                                                 // Kirim hasil scan ke callback
                                                 onQrCodeScanned(qrContent)

@@ -52,7 +52,11 @@ data class QueueItem(
     var finishedAt: Date? = null,
     @get:PropertyName("hasBeenLate")
     @set:PropertyName("hasBeenLate")
-    var hasBeenLate: Boolean = false
+    var hasBeenLate: Boolean = false,
+    val diagnosis: String = "",       // Diagnosa Penyakit
+    val treatment: String = "",       // Tindakan yang dilakukan
+    val prescription: String = "",    // Resep Obat
+    val doctorNotes: String = ""      // Catatan Tambahan
 )
 
 /**
