@@ -25,6 +25,12 @@ interface QueueRepository {
         prescription: String,
         notes: String
     ): Result<Unit>
+
+    suspend fun submitMedicalRecord(
+        queueId: String,
+        medicalData: Map<String, Any>
+    ): Result<Unit>
+
     suspend fun getVisitHistory(userId: String): List<HistoryItem>
     suspend fun checkForLatePatients(doctorId: String)
     suspend fun addManualQueue(patientName: String, complaint: String): Result<QueueItem>
@@ -36,4 +42,5 @@ interface QueueRepository {
     suspend fun updateEstimatedServiceTime(doctorId: String, minutes: Int): Result<Unit>
     suspend fun updatePatientCallTimeLimit(doctorId: String, minutes: Int): Result<Unit>
     suspend fun confirmArrivalByQr(documentId: String): Result<Unit>
+    suspend fun getQueueById(queueId: String): QueueItem?
 }

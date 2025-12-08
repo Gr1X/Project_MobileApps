@@ -26,13 +26,15 @@ import com.example.project_mobileapps.features.admin.manageSchedule.ManagePracti
 import com.example.project_mobileapps.features.admin.manageSchedule.ManagePracticeScheduleViewModel
 import com.example.project_mobileapps.features.admin.manageSchedule.ManagePracticeScheduleViewModelFactory
 import com.example.project_mobileapps.features.admin.manualQueue.AddManualQueueScreen
+import com.example.project_mobileapps.features.admin.reports.MedicalRecordDetailScreen
 import com.example.project_mobileapps.features.admin.reports.PatientHistoryDetailScreen
 import com.example.project_mobileapps.features.admin.reports.PatientHistoryDetailViewModel
 import com.example.project_mobileapps.features.admin.reports.PatientHistoryDetailViewModelFactory
 import com.example.project_mobileapps.features.admin.reports.ReportScreen
 import com.example.project_mobileapps.features.admin.reports.ReportViewModel
 import com.example.project_mobileapps.features.admin.reports.ReportViewModelFactory
-import com.example.project_mobileapps.features.doctor.ConsultationInputScreen // Import Screen Baru
+import com.example.project_mobileapps.features.doctor.ConsultationInputScreen
+import com.example.project_mobileapps.features.doctor.MedicalRecordInputScreen
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,14 +44,19 @@ fun AdminMainScreen(
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+
+    // Variabel NavController untuk Admin
     val adminNavController = rememberNavController()
+
     val navBackStackEntry by adminNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Sembunyikan App Bar di halaman-halaman tertentu
+    // Logic Sembunyikan App Bar di halaman detail
     val showMainAppBar = currentRoute != "add_manual_queue" &&
             (currentRoute?.startsWith("patient_history_detail") == false) &&
-            (currentRoute?.startsWith("consultation_input") == false)
+            (currentRoute?.startsWith("medical_record_input") == false) &&
+            (currentRoute?.startsWith("consultation_input") == false) &&
+            (currentRoute?.startsWith("medical_record_detail") == false)
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -102,7 +109,7 @@ fun AdminMainScreen(
                     )
                 }
 
-                // 2. MONITORING ANTRIAN (ERROR FIXED HERE)
+                // 2. MONITORING ANTRIAN
                 composable(AdminMenu.Monitoring.route) {
                     val user by AuthRepository.currentUser.collectAsState()
                     val userRole = user?.role
@@ -113,17 +120,48 @@ fun AdminMainScreen(
                     AdminQueueMonitorScreen(
                         viewModel = monitorViewModel,
                         currentUserRole = userRole,
-                        // Tambahkan parameter navigasi yang hilang:
+                        // Navigasi ke History
                         onNavigateToHistory = { patientId ->
                             adminNavController.navigate("patient_history_detail/$patientId")
                         },
-                        onFinishConsultation = { qNo, pName ->
-                            adminNavController.navigate("consultation_input/$qNo/$pName")
+                        // Navigasi ke Input Rekam Medis
+                        onNavigateToMedicalRecord = { qId, name, num ->
+                            adminNavController.navigate("medical_record_input/$qId/$name/$num")
                         }
                     )
                 }
 
-                // 3. MANAJEMEN JADWAL
+                // 3. SCREEN INPUT REKAM MEDIS
+                composable(
+                    route = "medical_record_input/{qId}/{name}/{num}",
+                    arguments = listOf(
+                        navArgument("qId") { type = NavType.StringType },
+                        navArgument("name") { type = NavType.StringType },
+                        navArgument("num") { type = NavType.StringType }
+                    )
+                ) { backStackEntry ->
+                    val qId = backStackEntry.arguments?.getString("qId") ?: ""
+                    val name = backStackEntry.arguments?.getString("name") ?: ""
+                    val num = backStackEntry.arguments?.getString("num") ?: ""
+
+                    val vm: AdminQueueMonitorViewModel = viewModel(
+                        factory = AdminQueueMonitorViewModelFactory(AppContainer.queueRepository, AuthRepository)
+                    )
+
+                    MedicalRecordInputScreen(
+                        queueId = qId,
+                        patientName = name,
+                        queueNumber = num,
+                        viewModel = vm,
+                        onNavigateBack = { adminNavController.popBackStack() },
+                        onRecordSaved = {
+                            // Jika sukses simpan, kembali ke Monitor dan refresh
+                            adminNavController.popBackStack(AdminMenu.Monitoring.route, false)
+                        }
+                    )
+                }
+
+                // 4. MANAJEMEN JADWAL
                 composable(AdminMenu.Management.items[0].route) {
                     val practiceViewModel: ManagePracticeScheduleViewModel = viewModel(
                         factory = ManagePracticeScheduleViewModelFactory(AppContainer.queueRepository)
@@ -131,7 +169,7 @@ fun AdminMainScreen(
                     ManagePracticeScheduleScreen(viewModel = practiceViewModel)
                 }
 
-                // 4. LAPORAN
+                // 5. LAPORAN
                 composable(AdminMenu.Management.items[1].route) {
                     val reportViewModel: ReportViewModel = viewModel(
                         factory = ReportViewModelFactory(AppContainer.queueRepository, AuthRepository)
@@ -144,28 +182,52 @@ fun AdminMainScreen(
                     )
                 }
 
-                // 5. MANUAL QUEUE
+                // 6. MANUAL QUEUE
                 composable("add_manual_queue") {
                     AddManualQueueScreen(
                         onNavigateBack = { adminNavController.popBackStack() }
                     )
                 }
 
-                // 6. DETAIL HISTORY (VIEW ONLY)
+                // 7. DETAIL HISTORY (VIEW ONLY)
                 composable(
                     route = "patient_history_detail/{patientId}",
                     arguments = listOf(navArgument("patientId") { type = NavType.StringType })
-                ) {
+                ) { backStackEntry ->
+                    val patientId = backStackEntry.arguments?.getString("patientId") ?: ""
+
                     val detailViewModel: PatientHistoryDetailViewModel = viewModel(
-                        factory = PatientHistoryDetailViewModelFactory(AppContainer.queueRepository, AuthRepository)
+                        factory = PatientHistoryDetailViewModelFactory(
+                            AppContainer.queueRepository,
+                            AuthRepository,
+                            patientId // Passing ID
+                        )
                     )
+
                     PatientHistoryDetailScreen(
                         viewModel = detailViewModel,
+                        // PERBAIKAN: Gunakan 'adminNavController' di sini
+                        onNavigateBack = { adminNavController.popBackStack() },
+                        onNavigateToDetail = { visitId ->
+                            adminNavController.navigate("medical_record_detail/$visitId")
+                        }
+                    )
+                }
+
+                // 8. DETAIL EMR (FULL PAGE)
+                composable(
+                    route = "medical_record_detail/{visitId}",
+                    arguments = listOf(navArgument("visitId") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val visitId = backStackEntry.arguments?.getString("visitId") ?: ""
+
+                    MedicalRecordDetailScreen(
+                        queueId = visitId,
                         onNavigateBack = { adminNavController.popBackStack() }
                     )
                 }
 
-                // 7. INPUT REKAM MEDIS (INPUT FORM)
+                // 9. SCREEN LAMA (Consultation Input - Opsional/Legacy)
                 composable(
                     route = "consultation_input/{queueNumber}/{patientName}",
                     arguments = listOf(
@@ -181,7 +243,6 @@ fun AdminMainScreen(
                         patientName = pName,
                         onNavigateBack = { adminNavController.popBackStack() },
                         onConsultationFinished = {
-                            // Kembali ke monitor setelah selesai
                             adminNavController.popBackStack(AdminMenu.Monitoring.route, false)
                         }
                     )

@@ -50,13 +50,24 @@ data class QueueItem(
     var calledAt: Date? = null,
     var startedAt: Date? = null,
     var finishedAt: Date? = null,
+
     @get:PropertyName("hasBeenLate")
     @set:PropertyName("hasBeenLate")
     var hasBeenLate: Boolean = false,
-    val diagnosis: String = "",       // Diagnosa Penyakit
-    val treatment: String = "",       // Tindakan yang dilakukan
-    val prescription: String = "",    // Resep Obat
-    val doctorNotes: String = ""      // Catatan Tambahan
+
+    // --- FIELD EMR (MEDICAL RECORD) ---
+    // Pastikan ini ada agar repository tidak error
+    val diagnosis: String = "",
+    val treatment: String = "",       // <--- INI YANG HILANG
+    val prescription: String = "",
+    val doctorNotes: String = "",
+
+    // Field Vital Sign (Opsional, tapi bagus ada)
+    val weightKg: Double = 0.0,
+    val heightCm: Double = 0.0,
+    val bloodPressure: String = "",
+    val temperature: Double = 0.0,
+    val physicalExam: String = ""
 )
 
 /**

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
@@ -16,6 +15,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.ConfirmationNumber
 import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -54,16 +54,14 @@ sealed class ConfirmationAction {
 fun AdminQueueMonitorScreen(
     viewModel: AdminQueueMonitorViewModel,
     currentUserRole: Role?,
+    // Parameter Navigasi Lengkap:
     onNavigateToHistory: (String) -> Unit,
-    onFinishConsultation: (Int, String) -> Unit
+    onNavigateToMedicalRecord: (String, String, String) -> Unit // (id, name, number)
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
 
     var showScanner by remember { mutableStateOf(false) }
-    // State baru untuk mencegah double scan
-    var isProcessingQr by remember { mutableStateOf(false) }
-
+    var isProcessingQr by remember { mutableStateOf(false) } // Debounce state
     var activeConfirmation by remember { mutableStateOf<ConfirmationAction?>(null) }
     var patientToView by remember { mutableStateOf<PatientQueueDetails?>(null) }
 
@@ -76,11 +74,9 @@ fun AdminQueueMonitorScreen(
             Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                 QrScannerScreen(
                     onQrCodeScanned = { scannedId ->
-                        // LOGIKA PENGUNCI (DEBOUNCE)
-                        // Hanya proses jika belum ada proses berjalan
                         if (!isProcessingQr) {
-                            isProcessingQr = true // Kunci segera!
-                            showScanner = false   // Tutup dialog
+                            isProcessingQr = true
+                            showScanner = false
                             viewModel.processQrCode(scannedId)
                         }
                     }
@@ -91,17 +87,12 @@ fun AdminQueueMonitorScreen(
                 ) {
                     Icon(Icons.Default.Close, "Tutup", tint = Color.White)
                 }
-                Text(
-                    text = "Arahkan kamera ke QR Code Pasien",
-                    color = Color.White,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(32.dp),
-                    style = MaterialTheme.typography.titleMedium
-                )
+                Text("Arahkan kamera ke QR Code Pasien", color = Color.White, modifier = Modifier.align(Alignment.BottomCenter).padding(32.dp), style = MaterialTheme.typography.titleMedium)
             }
         }
     }
 
-    // --- BOTTOM SHEET KONFIRMASI ---
+    // --- KONFIRMASI ACTION ---
     activeConfirmation?.let { action ->
         when (action) {
             is ConfirmationAction.Cancel -> {
@@ -112,7 +103,7 @@ fun AdminQueueMonitorScreen(
                         activeConfirmation = null
                     },
                     title = "Batalkan Antrian?",
-                    text = "Anda yakin ingin membatalkan antrian untuk pasien '${action.patient.queueItem.userName}'?"
+                    text = "Anda yakin ingin membatalkan antrian ini?"
                 )
             }
             is ConfirmationAction.CallNext -> {
@@ -122,8 +113,8 @@ fun AdminQueueMonitorScreen(
                         viewModel.callNextPatient()
                         activeConfirmation = null
                     },
-                    title = "Panggil Pasien Berikutnya?",
-                    text = "Anda akan memanggil pasien berikutnya dalam antrian."
+                    title = "Panggil Pasien?",
+                    text = "Anda akan memanggil pasien berikutnya."
                 )
             }
             is ConfirmationAction.Arrive -> {
@@ -141,19 +132,19 @@ fun AdminQueueMonitorScreen(
                 ConfirmationBottomSheet(
                     onDismiss = { activeConfirmation = null },
                     onConfirm = {
-                        val qNo = action.patient.queueItem.queueNumber
-                        val pName = action.patient.queueItem.userName
-                        onFinishConsultation(qNo, pName)
+                        // NAVIGASI KE INPUT REKAM MEDIS
+                        val item = action.patient.queueItem
+                        onNavigateToMedicalRecord(item.id, item.userName, item.queueNumber.toString())
                         activeConfirmation = null
                     },
                     title = "Selesaikan Konsultasi?",
-                    text = "Anda akan diarahkan ke halaman pengisian Rekam Medis sebelum sesi berakhir."
+                    text = "Anda akan diarahkan ke halaman pengisian Rekam Medis."
                 )
             }
         }
     }
 
-    // --- BOTTOM SHEET DETAIL PASIEN ---
+    // --- DETAIL PASIEN BOTTOM SHEET ---
     if (patientToView != null) {
         PatientDetailBottomSheet(
             patientDetails = patientToView!!,
@@ -161,16 +152,20 @@ fun AdminQueueMonitorScreen(
             onCancelClick = {
                 activeConfirmation = ConfirmationAction.Cancel(patientToView!!)
                 patientToView = null
+            },
+            onSeeHistoryClick = {
+                patientToView?.user?.uid?.let { userId ->
+                    onNavigateToHistory(userId)
+                }
             }
         )
     }
 
-    // --- MAIN UI ---
+    // --- UI UTAMA ---
     Scaffold(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = {
-                    // Saat membuka scanner, reset status pengunci agar bisa scan lagi
                     isProcessingQr = false
                     showScanner = true
                 },
@@ -183,7 +178,6 @@ fun AdminQueueMonitorScreen(
         floatingActionButtonPosition = FabPosition.Center
     ) { paddingValues ->
 
-        // HANYA ADA SATU LAZY COLUMN DI SINI
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -193,17 +187,20 @@ fun AdminQueueMonitorScreen(
             contentPadding = PaddingValues(bottom = 100.dp)
         ) {
             item { Spacer(modifier = Modifier.height(16.dp)) }
-
-            // 1. Statistik Atas
             item { TopStatsSection(uiState = uiState) }
 
-            // 2. Kartu Aksi Utama (Panggil/Layani)
-            item { MainActionSection(uiState = uiState, onAction = { activeConfirmation = it }, currentUserRole = currentUserRole) }
+            // BAGIAN UTAMA (MONITOR & TIMER)
+            item {
+                MainActionSection(
+                    uiState = uiState,
+                    onAction = { activeConfirmation = it },
+                    currentUserRole = currentUserRole
+                )
+            }
 
-            // 3. Filter & List Header
             item {
                 Column {
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     Text("Daftar Semua Antrian", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
                     FilterDropdownButton(
@@ -214,13 +211,12 @@ fun AdminQueueMonitorScreen(
                 }
             }
 
-            // 4. List Antrian
             if (uiState.isLoading) {
                 item { CircularProgressIndicator(modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally)) }
             } else if (uiState.fullQueueList.isEmpty()) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().padding(top = 32.dp), contentAlignment = Alignment.Center) {
-                        Text("Tidak ada antrian untuk filter ini.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Tidak ada antrian.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else {
@@ -235,17 +231,13 @@ fun AdminQueueMonitorScreen(
     }
 }
 
-// --- BAGIAN BAWAH TETAP SAMA (Components) ---
+// --- KOMPONEN HELPER ---
 
 @Composable
 fun TopStatsSection(uiState: DoctorQueueUiState) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         val servingNumber = uiState.currentlyServing?.queueItem?.queueNumber?.toString() ?: "-"
         val nextNumber = uiState.nextInLine?.queueItem?.queueNumber?.toString() ?: "-"
-
         SmallStatCard(label = "Sedang Dilayani", value = servingNumber, icon = Icons.Outlined.AccessTime, modifier = Modifier.weight(1f))
         SmallStatCard(label = "Total Antrian", value = uiState.totalWaitingCount.toString(), icon = Icons.Outlined.Groups, modifier = Modifier.weight(1f))
         SmallStatCard(label = "Antrian Berikutnya", value = nextNumber, icon = Icons.Outlined.ConfirmationNumber, modifier = Modifier.weight(1f))
@@ -255,10 +247,7 @@ fun TopStatsSection(uiState: DoctorQueueUiState) {
 @Composable
 fun SmallStatCard(label: String, value: String, icon: ImageVector, modifier: Modifier = Modifier) {
     Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
-        Column(
-            modifier = Modifier.padding(12.dp).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        Column(modifier = Modifier.padding(12.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(imageVector = icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(4.dp))
             Text(text = value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -267,22 +256,20 @@ fun SmallStatCard(label: String, value: String, icon: ImageVector, modifier: Mod
     }
 }
 
+// --- LOGIKA UTAMA TIMER (DIPERBAIKI) ---
 @Composable
-fun MainActionSection(
-    uiState: DoctorQueueUiState,
-    onAction: (ConfirmationAction) -> Unit,
-    currentUserRole: Role?
-) {
+fun MainActionSection(uiState: DoctorQueueUiState, onAction: (ConfirmationAction) -> Unit, currentUserRole: Role?) {
     when {
         uiState.currentlyServing != null -> {
+            val servingPatient = uiState.currentlyServing
             PatientActionProfileCard(
                 title = "Sedang Melayani",
-                patientDetails = uiState.currentlyServing,
+                patientDetails = servingPatient,
                 actionContent = {
                     var consultationTime by remember { mutableStateOf("00:00") }
-                    LaunchedEffect(uiState.currentlyServing.queueItem.startedAt) {
+                    LaunchedEffect(servingPatient.queueItem.startedAt) {
                         while (true) {
-                            val diff = Date().time - (uiState.currentlyServing.queueItem.startedAt?.time ?: 0)
+                            val diff = Date().time - (servingPatient.queueItem.startedAt?.time ?: 0)
                             val minutes = TimeUnit.MILLISECONDS.toMinutes(diff)
                             val seconds = TimeUnit.MILLISECONDS.toSeconds(diff) % 60
                             consultationTime = String.format("%02d:%02d", minutes, seconds)
@@ -293,22 +280,28 @@ fun MainActionSection(
                     Text(consultationTime, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
                     if (currentUserRole == Role.DOKTER) {
-                        Button(
-                            onClick = { onAction(ConfirmationAction.Finish(uiState.currentlyServing)) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("Selesai Konsultasi") }
+                        Button(onClick = { onAction(ConfirmationAction.Finish(servingPatient)) }, modifier = Modifier.fillMaxWidth()) { Text("Selesai Konsultasi") }
                     }
                 }
             )
         }
         uiState.patientCalled != null -> {
+            // FIX: Gunakan variabel lokal agar Smart Cast berhasil
+            val calledPatient = uiState.patientCalled
+
             PatientActionProfileCard(
                 title = "Telah Dipanggil",
-                patientDetails = uiState.patientCalled,
+                patientDetails = calledPatient,
                 actionContent = {
-                    var timeRemaining by remember { mutableStateOf("01:00") }
-                    LaunchedEffect(uiState.patientCalled.queueItem.calledAt) {
-                        val deadline = (uiState.patientCalled.queueItem.calledAt?.time ?: 0) + (15 * 60 * 1000) // 15 menit
+                    // FIX: Ambil durasi dari DB. Default 15 jika null.
+                    val limitMinutes = uiState.practiceStatus?.patientCallTimeLimitMinutes ?: 15
+
+                    var timeRemaining by remember { mutableStateOf("00:00") }
+
+                    LaunchedEffect(calledPatient.queueItem.calledAt, limitMinutes) {
+                        val calledTime = calledPatient.queueItem.calledAt?.time ?: 0
+                        val deadline = calledTime + (limitMinutes * 60 * 1000)
+
                         while (true) {
                             val remaining = deadline - Date().time
                             if (remaining > 0) {
@@ -322,13 +315,11 @@ fun MainActionSection(
                             delay(1000L)
                         }
                     }
+
                     Text("Sisa Waktu Kedatangan:", style = MaterialTheme.typography.labelMedium)
                     Text(timeRemaining, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = { onAction(ConfirmationAction.Arrive(uiState.patientCalled)) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Pasien Hadir") }
+                    Button(onClick = { onAction(ConfirmationAction.Arrive(calledPatient)) }, modifier = Modifier.fillMaxWidth()) { Text("Pasien Hadir") }
                 }
             )
         }
@@ -337,10 +328,7 @@ fun MainActionSection(
                 title = "Pasien Berikutnya",
                 patientDetails = uiState.nextInLine,
                 actionContent = {
-                    Button(
-                        onClick = { onAction(ConfirmationAction.CallNext) },
-                        modifier = Modifier.fillMaxWidth().height(50.dp)
-                    ) { Text("Panggil Pasien") }
+                    Button(onClick = { onAction(ConfirmationAction.CallNext) }, modifier = Modifier.fillMaxWidth().height(50.dp)) { Text("Panggil Pasien") }
                 }
             )
         }
@@ -353,15 +341,8 @@ fun MainActionSection(
 }
 
 @Composable
-fun PatientActionProfileCard(
-    title: String,
-    patientDetails: PatientQueueDetails,
-    actionContent: @Composable ColumnScope.() -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f))
-    ) {
+fun PatientActionProfileCard(title: String, patientDetails: PatientQueueDetails, actionContent: @Composable ColumnScope.() -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f))) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(12.dp))
@@ -380,7 +361,7 @@ fun PatientActionProfileCard(
                 },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent)
             )
-            Divider(modifier = Modifier.padding(vertical = 12.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, content = actionContent)
         }
     }
@@ -432,7 +413,12 @@ fun FilterDropdownButton(options: List<QueueStatus>, selectedOption: QueueStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PatientDetailBottomSheet(patientDetails: PatientQueueDetails, onDismiss: () -> Unit, onCancelClick: () -> Unit) {
+fun PatientDetailBottomSheet(
+    patientDetails: PatientQueueDetails,
+    onDismiss: () -> Unit,
+    onCancelClick: () -> Unit,
+    onSeeHistoryClick: () -> Unit
+) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
             Text("Detail Pasien", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
@@ -440,12 +426,32 @@ fun PatientDetailBottomSheet(patientDetails: PatientQueueDetails, onDismiss: () 
             DetailRow(label = "Nama Lengkap", value = patientDetails.user?.name ?: patientDetails.queueItem.userName)
             DetailRow(label = "Nomor Antrian", value = "#${patientDetails.queueItem.queueNumber}")
             DetailRow(label = "Keluhan Awal", value = patientDetails.queueItem.keluhan)
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             DetailRow(label = "Nomor Telepon", value = patientDetails.user?.phoneNumber ?: "N/A")
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            if (patientDetails.user != null) {
+                Button(
+                    onClick = onSeeHistoryClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Outlined.History, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Lihat Rekam Medis (History)")
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             if (patientDetails.queueItem.status == QueueStatus.MENUNGGU || patientDetails.queueItem.status == QueueStatus.DIPANGGIL) {
-                OutlinedButton(onClick = onCancelClick, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error), border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))) {
+                // Perbaikan Button Batal: BorderStroke & Icons.Filled.Delete sekarang aman
+                OutlinedButton(
+                    onClick = onCancelClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                ) {
                     Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Batalkan Antrian")

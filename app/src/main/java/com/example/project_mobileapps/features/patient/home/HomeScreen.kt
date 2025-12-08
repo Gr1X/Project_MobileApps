@@ -47,6 +47,7 @@ import kotlinx.coroutines.delay
 import java.util.Date
 import java.util.concurrent.TimeUnit
 import com.example.project_mobileapps.ui.components.FeaturedDoctorCard
+import com.example.project_mobileapps.ui.components.HomeBanner
 
 /**
  * Data class internal untuk merepresentasikan item pada [ActionButtonsRow].
@@ -85,36 +86,25 @@ fun HomeScreen(
     val hasUnreadNotifications = notifications.any { !it.isRead }
     val haptic = LocalHapticFeedback.current
 
-    // --- 1. TAMBAHKAN STATE UNTUK DIALOG ---
-    var showMealPlanDialog by remember { mutableStateOf(false) }
-
-    // --- 2. BUAT DIALOG-NYA ---
-    if (showMealPlanDialog) {
-        AlertDialog(
-            onDismissRequest = { showMealPlanDialog = false },
-            title = { Text("Fitur Segera Hadir!") },
-            text = { Text("Fitur ini nantinya akan memberikan rekomendasi rencana makan (meal plan) yang dipersonalisasi menggunakan machine learning untuk memprediksi kebutuhan nutrisi Anda.") },
-            confirmButton = {
-                TextButton(onClick = { showMealPlanDialog = false }) {
-                    Text("Mengerti")
-                }
-            }
-        )
-    }
-
     Scaffold(
+        containerColor = Color.White,
+
         topBar = {
             TopAppBar(
                 title = {  },
 
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.White,
+                    scrolledContainerColor = Color.White
+                ),
+
                 navigationIcon = {
-                    IconButton(
-                        onClick = {onProfileClick},
-                    ) {
+                    IconButton(onClick = onProfileClick) {
                         Icon(
                             imageVector = Icons.Filled.AccountCircle,
                             contentDescription = "Profil",
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(34.dp), // Sedikit diperbesar ala iOS
+                            tint = Color.Black // Ikon Hitam Pekat
                         )
                     }
                 },
@@ -204,7 +194,6 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
             Spacer(Modifier.height(16.dp))
@@ -222,39 +211,49 @@ fun HomeScreen(
                 fontWeight = FontWeight.Light
             )
 
-            Spacer(Modifier.height(24.dp))
-
-            val actionItems = listOf(
-                ActionItem("Booking", Icons.Outlined.LocalPharmacy),
-                ActionItem("News", Icons.Outlined.Newspaper),
-                ActionItem("Smart Meal Plan", Icons.Outlined.RestaurantMenu)
-            )
-
-            Text("Quick Actions", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-
-            ActionButtonsRow(
-                actions = actionItems,
-                onActionClick = { label ->
-                    // PERBAIKAN DI SINI: Samakan String dengan label di atas
-                    when (label) {
-                        "Booking" -> {
-                            // Masukkan aksi booking di sini, misal:
-                            onNavigateToQueue()
-                            // atau jika belum ada navigasi:
-                            // Toast.makeText(context, "Fitur Booking", Toast.LENGTH_SHORT).show()
-                        }
-                        "News" -> onNewsClick() // Ubah dari "Berita Kesehatan" jadi "News"
-                        "Smart Meal Plan" -> {
-                            // Pastikan Anda mem-passing lambda navigasi untuk ini di parameter HomeScreen
-                            // Atau panggil langsung jika navController tersedia di scope ini (tapi best practice-nya via callback)
-                            onSmartMealPlanClick()
-                        }
-                        else -> Toast.makeText(context, "$label diklik!", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            )
-
+            // --- 2. POSISI BANNER (DISINI) ---
+            // Beri sedikit jarak dari teks sapaan
             Spacer(Modifier.height(16.dp))
+
+            // Panggil Komponen Banner Anda
+            HomeBanner()
+
+            Spacer(Modifier.height(32.dp))
+
+            // 3. QUICK ACTIONS (iOS Style Grid)
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                Text(
+                    "Quick Actions", // Label asli
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = Color.Black
+                )
+
+                Spacer(Modifier.height(20.dp))
+
+                // Definisi Item dengan Label Asli
+                val actionItems = listOf(
+                    ActionItem("Booking", Icons.Outlined.LocalPharmacy),
+                    ActionItem("News", Icons.Outlined.Newspaper),
+                    ActionItem("Smart Meal\nPlan", Icons.Outlined.RestaurantMenu)
+                )
+
+                ActionButtonsRow(
+                    actions = actionItems,
+                    onActionClick = { label ->
+                        // Hapus newline untuk pengecekan logic
+                        val normalizedLabel = label.replace("\n", " ")
+
+                        when (normalizedLabel) {
+                            "Booking" -> onNavigateToQueue()
+                            "News" -> onNewsClick()
+                            "Smart Meal Plan" -> onSmartMealPlanClick()
+                            else -> Toast.makeText(context, "$normalizedLabel diklik!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+            }
+
+            Spacer(Modifier.height(32.dp))
 
             if (uiState.doctor != null) {
                 Text("Appointment", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
@@ -321,7 +320,8 @@ private fun ActionButtonsRow(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceAround
+        horizontalArrangement = Arrangement.SpaceBetween, // Jarak antar tombol rata
+        verticalAlignment = Alignment.Top
     ) {
         actions.forEach { action ->
             ActionButton(
@@ -332,6 +332,7 @@ private fun ActionButtonsRow(
         }
     }
 }
+
 /**
  * Composable helper (private) untuk satu tombol aksi (Ikon + Label).
  * @param label Teks di bawah ikon.
@@ -346,40 +347,42 @@ private fun ActionButton(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .width(90.dp)
-            .clickable(onClick = onClick)
-            .clip(MaterialTheme.shapes.medium)
+        modifier = Modifier.width(85.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(64.dp)
-                .background(
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    shape = CircleShape
-                )
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
+        // --- BUTTON LINGKARAN (INTERAKTIF) ---
+        Surface(
+            onClick = onClick,
+            shape = CircleShape,
+            color = Color(0xFFF2F2F7), // <-- iOS System Gray 6 (Abu sangat muda/tipis)
+            contentColor = MaterialTheme.colorScheme.primary, // Warna Ikon Biru/Primary
+            modifier = Modifier.size(56.dp) // Ukuran lingkaran sedikit lebih besar agar pas di jempol
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label
-            )
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // --- LABEL TEKS ---
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium.copy(
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                letterSpacing = 0.5.sp
+                letterSpacing = (-0.1).sp
             ),
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center, // 2. Rata tengah (wajib untuk 2 baris)
-            maxLines = 2, // 3. Batasi maksimal 2 baris
-            minLines = 2, // 4. TRICK PENTING: Paksa minimal 2 baris agar tinggi semua tombol sama rata (sejajar)
-            overflow = TextOverflow.Ellipsis, // Jika lebih dari 2 baris, kasih titik-titik (...)
-            lineHeight = 14.sp // 5. Atur jarak antar baris agar tidak terlalu renggang
+            color = Color.Black, // Teks Hitam
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            lineHeight = 16.sp
         )
     }
 }

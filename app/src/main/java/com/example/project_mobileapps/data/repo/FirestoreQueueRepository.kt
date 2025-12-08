@@ -39,19 +39,16 @@ object FirestoreQueueRepository : QueueRepository {
     private val repositoryScope = CoroutineScope(Dispatchers.Default)
 
     // =================================================================
-    // 1. DATA FLOWS (REAL-TIME READ) - FIXED ERRORS HERE
+    // 1. DATA FLOWS (REAL-TIME READ)
     // =================================================================
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override val practiceStatusFlow: StateFlow<Map<String, PracticeStatus>> = callbackFlow<Map<String, PracticeStatus>> {
-        Log.d("DEBUG_FLOW", "Memulai Listener Practice Status...")
-
         val listener = practiceStatusDoc.addSnapshotListener { snapshot, error ->
             if (error != null) {
-                Log.e("DEBUG_FLOW", "❌ Firebase Error: ${error.message}", error)
+                Log.e("FirestoreRepo", "Error Practice Status", error)
                 return@addSnapshotListener
             }
-
             if (snapshot != null && snapshot.exists()) {
                 try {
                     val status = snapshot.toObject(PracticeStatus::class.java)
@@ -59,14 +56,11 @@ object FirestoreQueueRepository : QueueRepository {
                         trySend(mapOf(doctorId to status))
                     }
                 } catch (e: Exception) {
-                    Log.e("DEBUG_FLOW", "❌ CRASH saat Konversi: ${e.message}", e)
+                    Log.e("FirestoreRepo", "Error parsing status", e)
                 }
             } else {
-                // FIX: Tambahkan tipe eksplisit <String, PracticeStatus>
                 trySend(emptyMap<String, PracticeStatus>())
             }
-
-            // FIX: Tambahkan Unit di akhir lambda agar return type cocok
             Unit
         }
         awaitClose { listener.remove() }
@@ -83,19 +77,33 @@ object FirestoreQueueRepository : QueueRepository {
 
         val listener = query.addSnapshotListener { snapshot, error ->
             if (error != null) {
-                Log.e("DEBUG_QUEUE", "❌ ERROR LISTENER: ${error.message}", error)
                 return@addSnapshotListener
             }
-
             if (snapshot != null) {
                 val queues = snapshot.toObjects(QueueItem::class.java)
-                trySend(queues.sortedBy { it.queueNumber })
+
+                // LOGIKA SORTING BARU:
+                val sortedList = queues.sortedWith(
+                    compareBy<QueueItem> {
+                        // 1. Urutkan Status: DILAYANI > DIPANGGIL > MENUNGGU
+                        when (it.status) {
+                            QueueStatus.DILAYANI -> 1
+                            QueueStatus.DIPANGGIL -> 2
+                            QueueStatus.MENUNGGU -> 3
+                            else -> 4
+                        }
+                    }.thenBy {
+                        // 2. Penalty: Jika MENUNGGU & Pernah Telat -> Lempar ke Belakang (Value 1)
+                        if (it.status == QueueStatus.MENUNGGU && it.hasBeenLate) 1 else 0
+                    }.thenBy {
+                        // 3. Sisanya urut nomor antrian biasa
+                        it.queueNumber
+                    }
+                )
+                trySend(sortedList)
             } else {
-                // FIX: Tambahkan tipe eksplisit <QueueItem>
                 trySend(emptyList<QueueItem>())
             }
-
-            // FIX: Tambahkan Unit di akhir lambda
             Unit
         }
         awaitClose { listener.remove() }
@@ -107,12 +115,19 @@ object FirestoreQueueRepository : QueueRepository {
     // =================================================================
 
     override suspend fun takeQueueNumber(doctorId: String, userId: String, userName: String, keluhan: String): Result<QueueItem> {
-        if (doctorId != AppContainer.CLINIC_ID) return Result.failure(Exception("ID Klinik Salah"))
-
         return try {
             val (startOfDay, endOfDay) = getTodayRange()
 
-            // 1. Cek Duplikasi
+            // 1. Cek Jadwal Praktik (Validasi Waktu)
+            val scheduleSnapshot = scheduleDoc.get().await()
+            val rawList = scheduleSnapshot.get("dailySchedules") as? List<*> ?: emptyList<Any>()
+            val scheduleList = parseScheduleList(rawList)
+
+            if (!isCurrentlyOpen(scheduleList)) {
+                return Result.failure(Exception("Pendaftaran gagal: Klinik sedang tutup (Di luar jam praktik)."))
+            }
+
+            // 2. Cek Duplikasi Harian
             val existingQuery = queuesCollection
                 .whereEqualTo("userId", userId)
                 .whereEqualTo("doctorId", doctorId)
@@ -125,15 +140,14 @@ object FirestoreQueueRepository : QueueRepository {
                 return Result.failure(Exception("Anda sudah terdaftar dalam antrian hari ini."))
             }
 
-            // 2. LOGIKA RESET HARIAN
+            // 3. LOGIKA Hitung Nomor Antrian Baru (Reset Harian)
             val lastQueueSnapshot = queuesCollection
                 .whereEqualTo("doctorId", doctorId)
                 .whereGreaterThanOrEqualTo("createdAt", startOfDay)
                 .whereLessThanOrEqualTo("createdAt", endOfDay)
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .limit(1)
-                .get()
-                .await()
+                .get().await()
 
             val nextQueueNumber = if (lastQueueSnapshot.isEmpty) {
                 1
@@ -142,13 +156,13 @@ object FirestoreQueueRepository : QueueRepository {
                 (lastItem?.queueNumber ?: 0) + 1
             }
 
-            // 3. Simpan
+            // 4. Simpan Data
             val newQueueItem = firestore.runTransaction { transaction ->
                 val snapshot = transaction.get(practiceStatusDoc)
                 val status = snapshot.toObject(PracticeStatus::class.java)
                     ?: throw Exception("Data praktik tidak ditemukan.")
 
-                if (!status.isPracticeOpen) throw Exception("Pendaftaran antrian sedang ditutup.")
+                if (!status.isPracticeOpen) throw Exception("Pendaftaran sedang ditutup oleh Admin.")
                 if (nextQueueNumber > status.dailyPatientLimit) throw Exception("Kuota antrian hari ini sudah penuh.")
 
                 val newQueueRef = queuesCollection.document()
@@ -179,7 +193,6 @@ object FirestoreQueueRepository : QueueRepository {
     override suspend fun cancelQueue(userId: String, doctorId: String): Result<Unit> {
         return try {
             val (startOfDay, endOfDay) = getTodayRange()
-
             val snapshot = queuesCollection
                 .whereEqualTo("userId", userId)
                 .whereEqualTo("doctorId", doctorId)
@@ -205,9 +218,9 @@ object FirestoreQueueRepository : QueueRepository {
     // 3. ADMIN/DOCTOR ACTIONS (SCAN & MANAGE)
     // =================================================================
 
-    override suspend fun confirmArrivalByQr(documentId: String): Result<Unit> {
+    override suspend fun confirmArrivalByQr(queueId: String): Result<Unit> {
         return try {
-            val docRef = queuesCollection.document(documentId)
+            val docRef = queuesCollection.document(queueId)
 
             firestore.runTransaction { transaction ->
                 val snapshot = transaction.get(docRef)
@@ -225,6 +238,7 @@ object FirestoreQueueRepository : QueueRepository {
                     transaction.update(docRef, "calledAt", Date())
                 }
                 transaction.update(practiceStatusDoc, "currentServingNumber", queueNumber)
+
             }.await()
 
             Result.success(Unit)
@@ -289,37 +303,27 @@ object FirestoreQueueRepository : QueueRepository {
     override suspend fun finishConsultation(
         queueNumber: Int, doctorId: String, diagnosis: String, treatment: String, prescription: String, notes: String
     ): Result<Unit> {
+        return Result.success(Unit)
+    }
+
+    override suspend fun submitMedicalRecord(queueId: String, medicalData: Map<String, Any>): Result<Unit> {
         return try {
-            val (startOfDay, endOfDay) = getTodayRange()
-            val snapshot = queuesCollection
-                .whereEqualTo("doctorId", doctorId)
-                .whereEqualTo("queueNumber", queueNumber)
-                .whereEqualTo("status", QueueStatus.DILAYANI.name)
-                .whereGreaterThanOrEqualTo("createdAt", startOfDay)
-                .whereLessThanOrEqualTo("createdAt", endOfDay)
-                .get().await()
+            val docRef = queuesCollection.document(queueId)
 
-            if (snapshot.documents.isNotEmpty()) {
-                val docRef = snapshot.documents[0].reference
-                firestore.runTransaction { transaction ->
-                    val practiceSnapshot = transaction.get(practiceStatusDoc)
-                    val totalServed = practiceSnapshot.getLong("totalServed") ?: 0
+            firestore.runTransaction { transaction ->
+                val updates = medicalData.toMutableMap()
+                updates["status"] = QueueStatus.SELESAI.name
+                updates["finishedAt"] = Date()
 
-                    transaction.update(docRef, mapOf(
-                        "status" to QueueStatus.SELESAI.name,
-                        "finishedAt" to Date(),
-                        "diagnosis" to diagnosis,
-                        "treatment" to treatment,
-                        "prescription" to prescription,
-                        "doctorNotes" to notes
-                    ))
-                    transaction.update(practiceStatusDoc, "totalServed", totalServed + 1)
-                    transaction.update(practiceStatusDoc, "currentServingNumber", 0)
-                }.await()
-                Result.success(Unit)
-            } else {
-                Result.failure(Exception("Pasien tidak ditemukan / status salah."))
-            }
+                transaction.update(docRef, updates)
+
+                val practiceSnapshot = transaction.get(practiceStatusDoc)
+                val totalServed = practiceSnapshot.getLong("totalServed") ?: 0
+                transaction.update(practiceStatusDoc, "totalServed", totalServed + 1)
+                transaction.update(practiceStatusDoc, "currentServingNumber", 0)
+            }.await()
+
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -334,31 +338,35 @@ object FirestoreQueueRepository : QueueRepository {
         return try {
             val snapshot = scheduleDoc.get().await()
             val rawList = snapshot.get("dailySchedules") as? List<*> ?: return emptyList()
-
-            rawList.mapNotNull { item ->
-                val map = item as? Map<String, Any> ?: return@mapNotNull null
-                val isOpenVal = map["isOpen"] ?: map["open"]
-                val isOpenBool = when(isOpenVal) {
-                    is Boolean -> isOpenVal
-                    is String -> isOpenVal.toBoolean()
-                    else -> false
-                }
-                DailyScheduleData(
-                    dayOfWeek = (map["dayOfWeek"] as? String)?.trim() ?: "N/A",
-                    isOpen = isOpenBool,
-                    startTime = map["startTime"] as? String ?: "00:00",
-                    endTime = map["endTime"] as? String ?: "00:00"
-                )
-            }
+            parseScheduleList(rawList)
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    private fun parseScheduleList(rawList: List<*>): List<DailyScheduleData> {
+        return rawList.mapNotNull { item ->
+            val map = item as? Map<String, Any> ?: return@mapNotNull null
+            val isOpenVal = map["isOpen"] ?: map["open"]
+            val isOpenBool = when(isOpenVal) {
+                is Boolean -> isOpenVal
+                is String -> isOpenVal.toBoolean()
+                else -> false
+            }
+            DailyScheduleData(
+                dayOfWeek = (map["dayOfWeek"] as? String)?.trim() ?: "N/A",
+                isOpen = isOpenBool,
+                startTime = map["startTime"] as? String ?: "00:00",
+                endTime = map["endTime"] as? String ?: "00:00"
+            )
         }
     }
 
     override suspend fun updateDoctorSchedule(doctorId: String, newSchedule: List<DailyScheduleData>): Result<Unit> {
         return try {
             scheduleDoc.update("dailySchedules", newSchedule).await()
-            checkAndUpdatePracticeStatus()
+            // Setelah update jadwal, paksa cek ulang agar status langsung berubah jika perlu
+            runAutoScheduleCheck()
             Result.success(Unit)
         } catch (e: Exception) { Result.failure(e) }
     }
@@ -386,7 +394,7 @@ object FirestoreQueueRepository : QueueRepository {
 
     override suspend fun addManualQueue(patientName: String, complaint: String): Result<QueueItem> {
         return try {
-            val newQueueItem = firestore.runTransaction { transaction ->
+            val newItem = firestore.runTransaction { transaction ->
                 val snapshot = transaction.get(practiceStatusDoc)
                 val status = snapshot.toObject(PracticeStatus::class.java) ?: throw Exception("Error")
 
@@ -406,15 +414,98 @@ object FirestoreQueueRepository : QueueRepository {
                 transaction.set(newQueueRef, newItem)
                 newItem
             }.await()
-            Result.success(newQueueItem)
+            Result.success(newItem)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
     // =================================================================
-    // 5. HELPER / AUTOMATION
+    // 5. HELPER / AUTOMATION (JANTUNG SISTEM OTOMATIS)
     // =================================================================
+
+    // Fungsi Utama: Cek Jam -> Buka/Tutup/Batal Otomatis
+    private suspend fun runAutoScheduleCheck() {
+        try {
+            val schedule = getDoctorSchedule(doctorId)
+            if (schedule.isEmpty()) return
+
+            val calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Jakarta"))
+            val dayMapping = listOf("Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu")
+            val currentDay = dayMapping[calendar.get(Calendar.DAY_OF_WEEK) - 1]
+            val nowMinutes = (calendar.get(Calendar.HOUR_OF_DAY) * 60) + calendar.get(Calendar.MINUTE)
+
+            val todaySchedule = schedule.find { it.dayOfWeek.trim().equals(currentDay, ignoreCase = true) }
+            val updates = mutableMapOf<String, Any>()
+
+            val snapshot = practiceStatusDoc.get().await()
+            val currentIsOpenInDb = snapshot.getBoolean("isPracticeOpen") ?: false
+
+            if (todaySchedule != null && todaySchedule.isOpen) {
+                val (sh, sm) = todaySchedule.startTime.split(":").map { it.toInt() }
+                val (eh, em) = todaySchedule.endTime.split(":").map { it.toInt() }
+                val startMins = sh * 60 + sm
+                val endMins = eh * 60 + em
+
+                // Selalu update info jam agar UI sinkron
+                updates["startTime"] = todaySchedule.startTime
+                updates["endTime"] = todaySchedule.endTime
+
+                if (nowMinutes in startMins..endMins) {
+                    // MASUK JAM PRAKTIK: Buka Otomatis jika masih tutup
+                    if (!currentIsOpenInDb) {
+                        updates["isPracticeOpen"] = true
+                    }
+                } else {
+                    // LEWAT JAM PRAKTIK: Tutup Otomatis jika masih buka
+                    if (currentIsOpenInDb) {
+                        updates["isPracticeOpen"] = false
+                        // BATALKAN SISA ANTRIAN KARENA SUDAH TUTUP
+                        cancelRemainingQueues(doctorId)
+                    }
+                }
+            } else {
+                // HARI LIBUR: Pastikan Tutup
+                if (currentIsOpenInDb) {
+                    updates["isPracticeOpen"] = false
+                    cancelRemainingQueues(doctorId)
+                }
+            }
+
+            if (updates.isNotEmpty()) {
+                practiceStatusDoc.update(updates).await()
+            }
+        } catch (e: Exception) { Log.e("Repo", "Auto Schedule Error", e) }
+    }
+
+    private suspend fun cancelRemainingQueues(doctorId: String) {
+        try {
+            val (start, end) = getTodayRange()
+            val activeQueues = queuesCollection
+                .whereEqualTo("doctorId", doctorId)
+                .whereGreaterThanOrEqualTo("createdAt", start)
+                .whereLessThanOrEqualTo("createdAt", end)
+                .whereIn("status", listOf("MENUNGGU", "DIPANGGIL"))
+                .get().await()
+
+            if (!activeQueues.isEmpty) {
+                val batch = firestore.batch()
+                activeQueues.documents.forEach {
+                    batch.update(it.reference, mapOf(
+                        "status" to QueueStatus.DIBATALKAN.name,
+                        "doctorNotes" to "Sistem: Dibatalkan otomatis (Klinik Tutup)"
+                    ))
+                }
+                batch.commit().await()
+                Log.d("FirestoreRepo", "🚫 Auto-Cancel ${activeQueues.size()} antrian sisa.")
+            }
+        } catch (e: Exception) { Log.e("FirestoreRepo", "Cancel error", e) }
+    }
+
+    // Override yang sempat hilang (FIX ERROR)
+    override suspend fun resetQueue() {
+        // Implementasi kosong karena reset harian sudah dihandle di takeQueueNumber
+    }
 
     override suspend fun getVisitHistory(userId: String): List<HistoryItem> {
         return try {
@@ -429,7 +520,7 @@ object FirestoreQueueRepository : QueueRepository {
                     visitId = queue.id,
                     userId = queue.userId,
                     doctorName = "Dr. Budi Santoso",
-                    visitDate = SimpleDateFormat("dd MMM yyyy", Locale("id", "ID")).format(queue.createdAt),
+                    visitDate = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(queue.createdAt),
                     initialComplaint = queue.keluhan,
                     status = queue.status,
                     diagnosis = queue.diagnosis,
@@ -487,9 +578,15 @@ object FirestoreQueueRepository : QueueRepository {
         } catch (e: Exception) { emptyList() }
     }
 
-    override suspend fun resetQueue() {}
-
-    // --- AUTOMATION FUNCTIONS ---
+    override suspend fun getQueueById(queueId: String): QueueItem? {
+        return try {
+            val snapshot = queuesCollection.document(queueId).get().await()
+            snapshot.toObject(QueueItem::class.java)
+        } catch (e: Exception) {
+            Log.e("FirestoreRepo", "Error getQueueById", e)
+            null
+        }
+    }
 
     private suspend fun cleanupOldQueues(doctorId: String) {
         try {
@@ -518,30 +615,54 @@ object FirestoreQueueRepository : QueueRepository {
 
     override suspend fun checkForLatePatients(doctorId: String) {
         try {
-            val (startOfDay, endOfDay) = getTodayRange()
-            val practiceStatus = practiceStatusFlow.value[doctorId] ?: return
-            val limitMs = practiceStatus.patientCallTimeLimitMinutes * 60 * 1000L
+            val (start, end) = getTodayRange()
+            val pStat = practiceStatusDoc.get().await().toObject(PracticeStatus::class.java) ?: return
+
+            // Ambil batas waktu (default 15 menit jika 0)
+            val limitMinutes = if (pStat.patientCallTimeLimitMinutes > 0) pStat.patientCallTimeLimitMinutes else 15
+            val limitMs = limitMinutes * 60 * 1000L
             val now = Date().time
 
+            // Cari pasien yang sedang DIPANGGIL hari ini
             val snapshot = queuesCollection
                 .whereEqualTo("status", QueueStatus.DIPANGGIL.name)
-                .whereGreaterThanOrEqualTo("createdAt", startOfDay)
-                .whereLessThanOrEqualTo("createdAt", endOfDay)
+                .whereGreaterThanOrEqualTo("createdAt", start)
+                .whereLessThanOrEqualTo("createdAt", end)
                 .get().await()
 
             for (doc in snapshot.documents) {
                 val calledAt = doc.getDate("calledAt")
-                val hasBeenLate = doc.getBoolean("hasBeenLate") ?: false
-                if (calledAt != null && !hasBeenLate) {
-                    if (now - calledAt.time > limitMs) {
-                        doc.reference.update(mapOf("status" to QueueStatus.MENUNGGU.name, "hasBeenLate" to true, "calledAt" to null))
+                // Cek apakah sudah pernah telat sebelumnya?
+                val isAlreadyLate = doc.getBoolean("hasBeenLate") ?: false
+
+                if (calledAt != null && (now - calledAt.time > limitMs)) {
+                    // WAKTU HABIS!
+
+                    if (isAlreadyLate) {
+                        // KASUS 2: SUDAH PERNAH TELAT -> SEKARANG TELAT LAGI -> BATALKAN
+                        doc.reference.update(mapOf(
+                            "status" to QueueStatus.DIBATALKAN.name,
+                            "doctorNotes" to "Sistem: Dibatalkan otomatis (Tidak hadir setelah 2x pemanggilan)"
+                        ))
+                        Log.d("FirestoreRepo", "🚫 Pasien ${doc.id} dibatalkan (Telat 2x).")
+
+                    } else {
+                        // KASUS 1: BARU PERTAMA KALI TELAT -> LEMPAR KE BELAKANG
+                        // Ubah status jadi MENUNGGU lagi, tapi tandai hasBeenLate=true
+                        // (Sistem sorting di dailyQueuesFlow akan otomatis menaruhnya di prioritas bawah)
+                        doc.reference.update(mapOf(
+                            "status" to QueueStatus.MENUNGGU.name,
+                            "hasBeenLate" to true,
+                            "calledAt" to null
+                        ))
+                        Log.d("FirestoreRepo", "⚠️ Pasien ${doc.id} telat pertama. Pindah ke belakang.")
                     }
                 }
             }
-        } catch (e: Exception) { Log.e("FirestoreRepo", "Check late error", e) }
+        } catch (e: Exception) {
+            Log.e("FirestoreRepo", "Check Late Error", e)
+        }
     }
-
-    // --- TIME HELPERS ---
 
     private fun getTodayRange(): Pair<Date, Date> {
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Jakarta"))
@@ -574,27 +695,16 @@ object FirestoreQueueRepository : QueueRepository {
         } catch (e: Exception) { false }
     }
 
-    private suspend fun checkAndUpdatePracticeStatus() {
-        try {
-            val schedule = getDoctorSchedule(doctorId)
-            val shouldBeOpen = isCurrentlyOpen(schedule)
-            val snapshot = practiceStatusDoc.get().await()
-            val currentIsOpenInDb = snapshot.getBoolean("isPracticeOpen") ?: false
-
-            if (currentIsOpenInDb != shouldBeOpen) {
-                setPracticeOpen(doctorId, shouldBeOpen)
-            }
-        } catch (e: Exception) { Log.e("FirestoreRepo", "Gagal check status", e) }
-    }
-
     // --- INIT: Start Automation ---
     init {
         repositoryScope.launch {
             cleanupOldQueues(doctorId) // Jalankan sekali saat app dibuka
+
             while (true) {
-                checkAndUpdatePracticeStatus()
+                // LOGIKA OTOMATIS AKTIF KEMBALI DI SINI
+                runAutoScheduleCheck()
                 checkForLatePatients(doctorId)
-                delay(30_000L)
+                delay(30_000L) // Cek setiap 30 detik
             }
         }
     }
