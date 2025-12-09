@@ -17,6 +17,7 @@ import com.example.project_mobileapps.navigation.AppNavigation
 import com.example.project_mobileapps.ui.components.CustomToast
 import com.example.project_mobileapps.ui.components.ToastManager
 import com.example.project_mobileapps.ui.themes.ProjectMobileAppsTheme
+import com.example.project_mobileapps.utils.CloudinaryHelper
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -35,6 +36,7 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalPermissionsApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CloudinaryHelper.init(this)
         setContent {
             ProjectMobileAppsTheme {
                 val navController = rememberNavController()

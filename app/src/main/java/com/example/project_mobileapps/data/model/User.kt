@@ -21,8 +21,10 @@ enum class Gender {
 enum class Role {
     /** Pengguna adalah seorang pasien. */
     PASIEN,
+
     /** Pengguna adalah seorang dokter. */
     DOKTER,
+
     /** Pengguna adalah seorang admin atau asisten dokter. */
     ADMIN
 }
@@ -51,7 +53,7 @@ data class User(
     val gender: Gender = Gender.PRIA,
     val dateOfBirth: String = "N/A",
     val profilePictureUrl: String = ""
-){
+) {
     @PropertyName("password")
     @get:Exclude
     private val passwordForFirestore: String? = password

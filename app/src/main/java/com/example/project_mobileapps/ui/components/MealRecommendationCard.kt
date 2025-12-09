@@ -1,268 +1,366 @@
 // File: ui/components/MealRecommendationCard.kt
 package com.example.project_mobileapps.ui.components
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.rounded.Restaurant
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.RestaurantMenu
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
+
+// --- DEFINISI WARNA TEMA (HARDCODED AGAR MUDAH DICOPY) ---
+val ThemePrimary = Color(0xFF6D80E3) // PrimaryPeriwinkle
+val ThemePurpleDark = Color(0xFF4F5EAA) // Versi lebih gelap
+val ThemePurpleLight = Color(0xFFA6B1F0) // Versi lebih terang
+val ThemeLavender = Color(0xFF9FA8DA) // Lavender lembut
+val ThemeSoftViolet = Color(0xFFB39DDB) // Ungu lembut
+val ThemeSlate = Color(0xFF7986CB) // Biru keabuan
 
 @Composable
 fun MealRecommendationCard(
     mealTime: String,
     foodName: String?,
-    macros: Any?, // String "{calories=..., protein=...}"
-    color: Color,
-    onClick: () -> Unit // Aksi untuk tombol "Lihat Resep"
+    macros: Any?,
+    color: Color, // Warna badge (Sarapan/Siang/Malam) tetap ikut parameter agar beda dikit
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
 ) {
-    // Parsing data nutrisi menjadi List object yang siap pakai untuk Grafik
-    val nutritionList = remember(macros) {
-        parseNutritionDataForBars(macros)
+    // Parsing data dengan palet warna "1 Aura"
+    val (calorieData, nutritionList) = remember(macros) {
+        parseNutritionDataMonochrome(macros)
     }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(2.dp),
-        shape = RoundedCornerShape(20.dp), // iOS Style Rounded
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
-        // HAPUS .clickable() dari sini agar kartu tidak bisa ditekan sembarangan
+        elevation = CardDefaults.cardElevation(4.dp),
+        shape = RoundedCornerShape(20.dp),
+        modifier = modifier
+            .heightIn(max = 500.dp)
     ) {
         Column(
-            modifier = Modifier.padding(20.dp)
-        ) {
-            // 1. HEADER (Waktu & Nama Makanan)
-            Row(verticalAlignment = Alignment.Top) {
-                // Ikon Makanan Bulat
-                Surface(
-                    color = color.copy(alpha = 0.1f),
-                    shape = CircleShape,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Rounded.Restaurant,
-                            contentDescription = null,
-                            tint = color,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Column {
-                    // Label Waktu (Capsule)
-                    Surface(
-                        color = Color(0xFFF2F2F7), // iOS Gray
-                        shape = RoundedCornerShape(6.dp)
-                    ) {
-                        Text(
-                            text = mealTime.uppercase(),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp
-                            ),
-                            color = Color.Gray,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Nama Makanan Besar
-                    Text(
-                        text = foodName ?: "Belum ada rekomendasi",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = Color(0xFF1C1C1E),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            // 2. STATISTIK NUTRISI (BARS)
-            if (nutritionList.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(20.dp))
-                HorizontalDivider(color = Color(0xFFF2F2F7))
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    "Informasi Nutrisi",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.Gray,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Loop setiap nutrisi dan buat Bar Chart
-                nutritionList.forEach { item ->
-                    NutritionProgressBar(
-                        label = item.label,
-                        valueText = item.value,
-                        percentage = item.percentage, // 0.0f - 1.0f
-                        color = item.color
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-            }
-
-            // 3. TOMBOL AKSI (LIHAT RESEP)
-            Spacer(modifier = Modifier.height(20.dp))
-            OutlinedButton(
-                onClick = onClick,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Lihat Cara Masak (Resep)", fontWeight = FontWeight.SemiBold)
-            }
-        }
-    }
-}
-
-// --- SUB-COMPONENT: PROGRESS BAR ---
-@Composable
-fun NutritionProgressBar(
-    label: String,
-    valueText: String,
-    percentage: Float,
-    color: Color
-) {
-    // Animasi Progress Bar
-    val animatedProgress by animateFloatAsState(
-        targetValue = percentage,
-        animationSpec = tween(durationMillis = 1000) // Durasi animasi 1 detik
-    )
-
-    Column {
-        // Label & Value (Kiri Kanan)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Black.copy(alpha = 0.7f),
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = valueText,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Black,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // Bar Visual
-        LinearProgressIndicator(
-            progress = { animatedProgress }, // Gunakan nilai animasi
             modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp) // Lebih tipis (Minimalis)
-                .clip(RoundedCornerShape(50)), // Rounded ends
-            color = color,
-            trackColor = Color(0xFFF2F2F7), // Abu background bar
-            strokeCap = StrokeCap.Round,
+                .padding(16.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // --- HEADER COMPACT ---
+            Surface(
+                color = color.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(50),
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.RestaurantMenu,
+                        contentDescription = null,
+                        tint = color,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = mealTime.uppercase(),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        ),
+                        color = color
+                    )
+                }
+            }
+
+            // Nama Makanan
+            Text(
+                text = foodName ?: "Menu Rekomendasi",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp
+                ),
+                color = Color(0xFF1C1C1E),
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .wrapContentHeight(Alignment.CenterVertically)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- CHART (WARNA "SATU AURA") ---
+            val chartItems = nutritionList.filter {
+                it.key in listOf("carbs", "protein", "fat", "sugar", "fiber")
+            }
+
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(120.dp)
+            ) {
+                MacroDonutChart(
+                    macros = chartItems,
+                    modifier = Modifier.size(120.dp),
+                    strokeWidth = 12.dp
+                )
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = calorieData.value,
+                        style = MaterialTheme.typography.headlineSmall.copy(
+                            fontWeight = FontWeight.Black,
+                            fontSize = 24.sp,
+                            letterSpacing = (-0.5).sp
+                        ),
+                        color = ThemePrimary // Angka Kalori ikut warna tema
+                    )
+                    Text(
+                        text = "Kcal",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Gray,
+                            fontSize = 10.sp
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // --- GRID NUTRISI ---
+            if (nutritionList.isNotEmpty()) {
+                NutritionGridCompact(nutritionList)
+            } else {
+                Text("-", style = MaterialTheme.typography.bodySmall)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- TOMBOL LIHAT RESEP ---
+            Button(
+                onClick = onClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ThemePrimary, // Tombol pakai warna Utama (Periwinkle)
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Lihat Resep",
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// --- GRID LAYOUT COMPACT ---
+@Composable
+fun NutritionGridCompact(items: List<NutritionItem>) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        val chunkedItems = items.chunked(3)
+        chunkedItems.forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowItems.forEach { item ->
+                    Box(modifier = Modifier.weight(1f)) {
+                        NutritionCardItemCompact(item)
+                    }
+                }
+                repeat(3 - rowItems.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun NutritionCardItemCompact(item: NutritionItem) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF9FAFB)),
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFFE5E7EB)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(vertical = 8.dp, horizontal = 2.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Dot Warna (Sesuai Aura)
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(item.color)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = item.value,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 12.sp
+                ),
+                color = Color.Black
+            )
+
+            Text(
+                text = item.label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Normal
+                ),
+                color = Color.Gray,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+// --- CHART COMPONENT ---
+@Composable
+fun MacroDonutChart(
+    macros: List<NutritionItem>,
+    modifier: Modifier = Modifier,
+    strokeWidth: Dp
+) {
+    Canvas(modifier = modifier) {
+        val totalValue = macros.sumOf { it.rawValue.toDouble() }.toFloat()
+        var currentStartAngle = -90f
+        val size = Size(size.width, size.height)
+
+        // Background Lingkaran (Abu sangat muda)
+        drawArc(
+            color = Color(0xFFF0F0F5),
+            startAngle = 0f,
+            sweepAngle = 360f,
+            useCenter = false,
+            style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round),
+            size = size
         )
-    }
-}
 
-// --- DATA CLASS UNTUK PARSING ---
-data class NutritionData(
-    val label: String,
-    val value: String,
-    val percentage: Float,
-    val color: Color
-)
+        macros.forEach { item ->
+            val sweepAngle = if (totalValue > 0) {
+                (item.rawValue / totalValue) * 360f
+            } else 0f
 
-// --- LOGIC PARSING PINTAR ---
-fun parseNutritionDataForBars(macros: Any?): List<NutritionData> {
-    if (macros == null) return emptyList()
-
-    val rawString = macros.toString() // Contoh: "{calories=500, protein=30g, carbs=50g}"
-    val cleanString = rawString.replace("{", "").replace("}", "")
-    val parts = cleanString.split(",")
-
-    val result = mutableListOf<NutritionData>()
-    // Set untuk melacak label yang sudah ditambahkan agar tidak duplikat
-    val seenLabels = mutableSetOf<String>()
-
-    for (part in parts) {
-        val pair = part.split("=")
-        if (pair.size == 2) {
-            val key = pair[0].trim().lowercase()
-            val valueStr = pair[1].trim()
-
-            // Ekstrak angka dari string (misal "30g" -> 30.0)
-            val numberValue = valueStr.filter { it.isDigit() || it == '.' }.toFloatOrNull() ?: 0f
-
-            // Tentukan Label, Warna, dan Persentase Visual (Estimasi Max)
-            val (label, color, maxVal) = when {
-                key.contains("cal") -> Triple("Kalori", Color(0xFFFF9800), 800f) // Max 800 kcal per meal
-                key.contains("prot") -> Triple("Protein", Color(0xFF2196F3), 50f) // Max 50g
-                key.contains("carb") -> Triple("Karbohidrat", Color(0xFF4CAF50), 100f) // Max 100g
-                key.contains("fat") || key.contains("lemak") -> Triple("Lemak", Color(0xFFF44336), 40f) // Max 40g
-                else -> Triple(key.capitalize(), Color.Gray, 100f)
-            }
-
-            // [FIX DUPLIKAT] Cek apakah label ini sudah ada
-            if (!seenLabels.contains(label)) {
-                // Hitung persentase bar (0.0 - 1.0)
-                val progress = (numberValue / maxVal).coerceIn(0.05f, 1.0f) // Min 5% biar bar kelihatan
-                result.add(NutritionData(label, valueStr, progress, color))
-                seenLabels.add(label)
-            }
-        }
-    }
-    // Urutkan biar rapi: Kalori -> Protein -> Karbo -> Lemak
-    return result.sortedBy {
-        when(it.label) {
-            "Kalori" -> 1
-            "Protein" -> 2
-            "Karbohidrat" -> 3
-            else -> 4
+            drawArc(
+                color = item.color,
+                startAngle = currentStartAngle,
+                sweepAngle = sweepAngle - 3f, // Gap kecil
+                useCenter = false,
+                style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round),
+                size = size
+            )
+            currentStartAngle += sweepAngle
         }
     }
 }
 
-// Extension kapitalisasi
-private fun String.capitalize(): String {
-    return this.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+data class NutritionItem(val key: String, val label: String, val value: String, val unit: String, val rawValue: Float, val color: Color)
+
+// --- PARSING DATA (DENGAN WARNA MONOCHROME PURPLE) ---
+fun parseNutritionDataMonochrome(macros: Any?): Pair<NutritionItem, List<NutritionItem>> {
+    var calorieItem = NutritionItem("energy", "Kalori", "0", "kcal", 0f, Color.Black)
+    val list = mutableListOf<NutritionItem>()
+    if (macros == null) return Pair(calorieItem, list)
+
+    val rawString = macros.toString()
+    val regex = Regex("([a-zA-Z0-9_]+)\\s*[:=]\\s*([0-9]+\\.?[0-9]*)")
+    val matches = regex.findAll(rawString)
+
+    for (match in matches) {
+        val key = match.groupValues[1].lowercase().trim()
+        val valueStr = match.groupValues[2].trim()
+        val numVal = valueStr.toFloatOrNull() ?: 0f
+        val formattedVal = if (numVal % 1.0 == 0.0) numVal.toInt().toString() else String.format(Locale.US, "%.1f", numVal)
+
+        // --- PEMBAGIAN WARNA SATU AURA (GRADASI UNGU) ---
+        when {
+            // Kalori
+            key.contains("energy") || key.contains("kcal") || key.contains("cal") -> {
+                if (!key.contains("calc")) calorieItem = NutritionItem("energy", "Kalori", formattedVal, "kcal", numVal, Color.Black)
+            }
+            // Protein (Warna Utama/Tergelap)
+            key.contains("prot") ->
+                list.add(NutritionItem("protein", "Protein", formattedVal, "g", numVal, ThemePrimary))
+
+            // Karbo (Warna Lavender)
+            key.contains("carb") || key.contains("karbo") ->
+                list.add(NutritionItem("carbs", "Karbo", formattedVal, "g", numVal, ThemeLavender))
+
+            // Lemak (Warna Ungu Gelap)
+            key.contains("fat") || key.contains("lemak") ->
+                list.add(NutritionItem("fat", "Lemak", formattedVal, "g", numVal, ThemePurpleDark))
+
+            // Fiber (Warna Biru Keabuan/Slate)
+            key.contains("fib") || key.contains("serat") ->
+                list.add(NutritionItem("fiber", "Serat", formattedVal, "g", numVal, ThemeSlate))
+
+            // Gula (Warna Ungu Soft/Pinkish Purple)
+            key.contains("sugar") || key.contains("gula") ->
+                list.add(NutritionItem("sugar", "Gula", formattedVal, "g", numVal, ThemeSoftViolet))
+
+            // Kolesterol (Warna Terang)
+            key.contains("chol") || key.contains("kolest") ->
+                list.add(NutritionItem("cholesterol", "Kolest.", formattedVal, "mg", numVal, ThemePurpleLight))
+
+            // Kalsium (Warna Abu Ungu)
+            key.contains("calc") || key.contains("kals") ->
+                list.add(NutritionItem("calcium", "Kalsium", formattedVal, "mg", numVal, Color(0xFFC5CAE9)))
+        }
+    }
+
+    val order = listOf("carbs", "protein", "fat", "fiber", "sugar", "cholesterol", "calcium")
+    val sortedList = list.sortedBy { val idx = order.indexOf(it.key); if (idx == -1) 99 else idx }
+    return Pair(calorieItem, sortedList)
 }

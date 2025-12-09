@@ -198,18 +198,22 @@ fun HomeScreen(
         ) {
             Spacer(Modifier.height(16.dp))
 
-            Text(
-                text = "${uiState.greeting}, ${uiState.userName} 👋",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
+            Column(
+                modifier = Modifier.padding(horizontal = 20.dp)
+            ){
+                Text(
+                    text = "${uiState.greeting}, ${uiState.userName} 👋",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
 
-            Text(
-                text = "How are you feeling today?",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Light
-            )
+                Text(
+                    text = "How are you feeling today?",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Light
+                )
+            }
 
             // --- 2. POSISI BANNER (DISINI) ---
             // Beri sedikit jarak dari teks sapaan
@@ -218,7 +222,7 @@ fun HomeScreen(
             // Panggil Komponen Banner Anda
             HomeBanner()
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(16.dp))
 
             // 3. QUICK ACTIONS (iOS Style Grid)
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
@@ -228,7 +232,7 @@ fun HomeScreen(
                     color = Color.Black
                 )
 
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(10.dp))
 
                 // Definisi Item dengan Label Asli
                 val actionItems = listOf(
@@ -253,18 +257,26 @@ fun HomeScreen(
                 )
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(16.dp))
 
             if (uiState.doctor != null) {
-                Text("Appointment", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Column(
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                ){
+                    Text(
+                        "Appointments ", // Label asli
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color.Black
+                    )
 
-                FeaturedDoctorCard(
-                    doctor = uiState.doctor,
-                    practiceStatus = uiState.practiceStatus,
-                    upcomingQueue = uiState.upcomingQueue,
-                    availableSlots = uiState.availableSlots,
-                    onTakeQueueClick = onTakeQueueClick
-                )
+                    FeaturedDoctorCard(
+                        doctor = uiState.doctor,
+                        practiceStatus = uiState.practiceStatus,
+                        upcomingQueue = uiState.upcomingQueue,
+                        availableSlots = uiState.availableSlots,
+                        onTakeQueueClick = onTakeQueueClick
+                    )
+                }
             }
         }
     }
