@@ -31,10 +31,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.project_mobileapps.R
 import com.example.project_mobileapps.data.model.User
+import com.example.project_mobileapps.ui.components.PasswordTextField
+import com.example.project_mobileapps.ui.components.PrimaryTextField
 import com.example.project_mobileapps.ui.themes.TextSecondary
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.outlined.LockClock
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.sp
+import com.example.project_mobileapps.utils.PasswordStrength
 
 private enum class AuthTab { LOGIN, REGISTER }
 
@@ -50,6 +58,8 @@ fun AuthScreen(
     var rememberMe by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+
+    var showForgotPassDialog by remember { mutableStateOf(false) }
     // Activity tidak lagi wajib untuk Email Auth, tapi Google Sign In butuh context
 
     // --- SETUP GOOGLE SIGN IN ---
@@ -84,6 +94,19 @@ fun AuthScreen(
         if (authState.loggedInUser != null) {
             onAuthSuccess(authState.loggedInUser!!)
         }
+    }
+
+    if (showForgotPassDialog) {
+        ForgotPasswordDialog(
+            onDismiss = { showForgotPassDialog = false },
+            onSendClick = { email ->
+                // Panggil ViewModel untuk kirim email
+                authViewModel.resetPassword(email) {
+                    // Callback jika sukses: tutup dialog
+                    showForgotPassDialog = false
+                }
+            }
+        )
     }
 
     // --- LOGIC TAMPILAN ---
@@ -141,14 +164,32 @@ fun AuthScreen(
                         )
                     } else {
                         RegisterFields(
+                            // Data
                             name = authState.registerName, onNameChange = authViewModel::onRegisterNameChange,
                             email = authState.registerEmail, onEmailChange = authViewModel::onRegisterEmailChange,
-                            password = authState.registerPassword, onPasswordChange = authViewModel::onRegisterPasswordChange,
                             phone = authState.registerPhone, onPhoneChange = authViewModel::onRegisterPhoneChange,
+
+                            // Password Logic
+                            password = authState.registerPassword,
+                            onPasswordChange = authViewModel::onRegisterPasswordChange,
+                            confirmPassword = authState.confirmPassword,       // <--- Baru
+                            onConfirmPasswordChange = authViewModel::onConfirmPasswordChange, // <--- Baru
+                            passwordStrength = authState.passwordStrength,     // <--- Baru
+
+                            // Privacy Logic
+                            isPrivacyAccepted = authState.isPrivacyAccepted,   // <--- Baru
+                            onPrivacyChange = authViewModel::onPrivacyChange,  // <--- Baru
+
+                            // Errors
                             nameError = authState.registerNameError,
                             emailError = authState.registerEmailError,
+                            phoneError = authState.registerPhoneError,
                             passwordError = authState.registerPasswordError,
-                            phoneError = authState.registerPhoneError
+                            confirmPasswordError = authState.confirmPasswordError, // <--- Baru
+                            privacyError = authState.privacyError,             // <--- Baru
+
+                            // Action
+                            onDone = { authViewModel.registerUser() }
                         )
                     }
                 }
@@ -159,11 +200,7 @@ fun AuthScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = rememberMe, onCheckedChange = { rememberMe = it })
-                            Text("Ingat Saya", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        TextButton(onClick = { /* TODO */ }) {
+                        TextButton(onClick = { showForgotPassDialog = true }) {
                             Text("Lupa Password?", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                         }
                     }
@@ -204,8 +241,14 @@ fun AuthScreen(
                 Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     SocialLoginButton(
                         text = "Google",
-                        iconRes = R.drawable.google,
-                        onClick = { googleLauncher.launch(googleSignInClient.signInIntent) },
+                        iconRes = R.drawable.google, // Pastikan icon ada
+                        onClick = {
+                            // [PERBAIKAN]: Sign Out dulu dari Google Client agar dialog pemilihan akun muncul lagi
+                            googleSignInClient.signOut().addOnCompleteListener {
+                                // Setelah logout lokal sukses, baru luncurkan intent login
+                                googleLauncher.launch(googleSignInClient.signInIntent)
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -264,23 +307,21 @@ private fun LoginFields(
     password: String, onPasswordChange: (String) -> Unit,
     emailError: String?, passwordError: String?
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            value = email, onValueChange = onEmailChange,
-            label = { Text("Alamat Email") },
-            leadingIcon = { Icon(Icons.Outlined.Email, null) },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),
-            isError = emailError != null,
-            supportingText = { if (emailError != null) Text(emailError, color = MaterialTheme.colorScheme.error) }
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { // Spacing lebih lega
+        PrimaryTextField(
+            value = email,
+            onValueChange = onEmailChange,
+            label = "Alamat Email",
+            leadingIcon = Icons.Outlined.Email,
+            errorMessage = emailError,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
         )
-        OutlinedTextField(
-            value = password, onValueChange = onPasswordChange,
-            label = { Text("Password") },
-            leadingIcon = { Icon(Icons.Outlined.Lock, null) },
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),
-            isError = passwordError != null,
-            supportingText = { if (passwordError != null) Text(passwordError, color = MaterialTheme.colorScheme.error) }
+        PasswordTextField(
+            value = password,
+            onValueChange = onPasswordChange,
+            label = "Password",
+            leadingIcon = Icons.Outlined.Lock,
+            errorMessage = passwordError
         )
     }
 }
@@ -291,43 +332,82 @@ private fun RegisterFields(
     email: String, onEmailChange: (String) -> Unit,
     password: String, onPasswordChange: (String) -> Unit,
     phone: String, onPhoneChange: (String) -> Unit,
-    nameError: String?, emailError: String?, passwordError: String?, phoneError: String?
+
+    nameError: String?, emailError: String?, passwordError: String?,
+    phoneError: String?, confirmPassword: String, privacyError: String?,
+
+    onConfirmPasswordChange: (String) -> Unit,
+    confirmPasswordError: String?,
+    passwordStrength: PasswordStrength, // Parameter Baru
+    isPrivacyAccepted: Boolean,         // Parameter Baru
+    onPrivacyChange: (Boolean) -> Unit, // Parameter Baru
+    onDone: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            value = name, onValueChange = onNameChange,
-            label = { Text("Nama Lengkap") },
-            leadingIcon = { Icon(Icons.Outlined.Person, null) },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),
-            isError = nameError != null,
-            supportingText = { if (nameError != null) Text(nameError, color = MaterialTheme.colorScheme.error) }
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        PrimaryTextField(
+            value = name, onValueChange = onNameChange, label = "Nama Lengkap",
+            leadingIcon = Icons.Outlined.Person, errorMessage = nameError
         )
-        OutlinedTextField(
-            value = email, onValueChange = onEmailChange,
-            label = { Text("Alamat Email") },
-            leadingIcon = { Icon(Icons.Outlined.Email, null) },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),
-            isError = emailError != null,
-            supportingText = { if (emailError != null) Text(emailError, color = MaterialTheme.colorScheme.error) }
+        PrimaryTextField(
+            value = email, onValueChange = onEmailChange, label = "Alamat Email",
+            leadingIcon = Icons.Outlined.Email, errorMessage = emailError,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
         )
-        OutlinedTextField(
-            value = phone, onValueChange = onPhoneChange,
-            label = { Text("Nomor HP") },
-            leadingIcon = { Icon(Icons.Outlined.Phone, null) },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-            isError = phoneError != null,
-            supportingText = { if (phoneError != null) Text(phoneError, color = MaterialTheme.colorScheme.error) }
+        PrimaryTextField(
+            value = phone, onValueChange = onPhoneChange, label = "Nomor Handphone",
+            leadingIcon = Icons.Outlined.Phone, errorMessage = phoneError,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
         )
-        OutlinedTextField(
-            value = password, onValueChange = onPasswordChange,
-            label = { Text("Password") },
-            leadingIcon = { Icon(Icons.Outlined.Lock, null) },
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(16.dp),
-            isError = passwordError != null,
-            supportingText = { if (passwordError != null) Text(passwordError, color = MaterialTheme.colorScheme.error) }
+        // --- PASSWORD UTAMA ---
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            PasswordTextField(
+                value = password, onValueChange = onPasswordChange, label = "Buat Password",
+                leadingIcon = Icons.Outlined.Lock, errorMessage = passwordError
+            )
+            // INDIKATOR KEKUATAN PASSWORD
+            if (password.isNotEmpty()) {
+                PasswordStrengthBar(strength = passwordStrength)
+            }
+        }
+
+        // --- KONFIRMASI PASSWORD ---
+        PasswordTextField(
+            value = confirmPassword,
+            onValueChange = onConfirmPasswordChange,
+            label = "Ulangi Password",
+            leadingIcon = Icons.Outlined.LockClock, // Icon beda dikit biar variasi
+            errorMessage = confirmPasswordError
         )
+
+        Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onPrivacyChange(!isPrivacyAccepted) } // Klik teks juga bisa centang
+            ) {
+                Checkbox(
+                    checked = isPrivacyAccepted,
+                    onCheckedChange = onPrivacyChange,
+                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                )
+                Text(
+                    text = "Saya setuju dengan Syarat & Ketentuan serta Kebijakan Privasi.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
+            // Tampilkan error jika belum dicentang saat klik Daftar
+            if (privacyError != null) {
+                Text(
+                    text = privacyError,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+            }
+        }
     }
 }
 
@@ -347,6 +427,48 @@ private fun SocialLoginButton(text: String, iconRes: Int, onClick: () -> Unit, m
             Image(painterResource(id = iconRes), contentDescription = null, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text(text, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+// --- KOMPONEN BARU: PasswordStrengthBar ---
+@Composable
+fun PasswordStrengthBar(strength: PasswordStrength) {
+    val animatedProgress by animateFloatAsState(targetValue = strength.progress, label = "strength")
+
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Kekuatan: ${strength.label}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(strength.color)
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        // Progress Bar Kustom
+        LinearProgressIndicator(
+            progress = { animatedProgress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = Color(strength.color),
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+
+        // Tips kecil (Opsional)
+        if (strength == PasswordStrength.WEAK) {
+            Text(
+                text = "Gunakan kombinasi huruf besar, angka, dan simbol.",
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp)
+            )
         }
     }
 }

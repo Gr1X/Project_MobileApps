@@ -64,7 +64,7 @@ fun HistoryScreen(
                     items(uiState.historyList) { historyItem ->
                         HistoryItemCard(
                             item = historyItem,
-                            onClick = { onHistoryClick(historyItem) }
+                            onClick = { onHistoryClick(historyItem) } // Ini sudah benar, di AppNavigation kita ambil item.visitId
                         )
                     }
                 }

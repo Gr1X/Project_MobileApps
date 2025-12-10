@@ -13,11 +13,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
+import com.example.project_mobileapps.features.notifications.GlobalNotificationObserver
 import com.example.project_mobileapps.navigation.AppNavigation
 import com.example.project_mobileapps.ui.components.CustomToast
 import com.example.project_mobileapps.ui.components.ToastManager
 import com.example.project_mobileapps.ui.themes.ProjectMobileAppsTheme
 import com.example.project_mobileapps.utils.CloudinaryHelper
+import com.example.project_mobileapps.utils.NotificationHelper
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -37,6 +39,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CloudinaryHelper.init(this)
+        NotificationHelper.createNotificationChannels(this)
         setContent {
             ProjectMobileAppsTheme {
                 val navController = rememberNavController()
@@ -47,6 +50,24 @@ class MainActivity : ComponentActivity() {
                  * di atas [AppNavigation].
                  */
                 // Bungkus navigasi dengan Box agar Toast bisa tampil di atasnya
+
+                LaunchedEffect(Unit) {
+                    val targetRoute = intent.getStringExtra("TARGET_ROUTE")
+                    if (!targetRoute.isNullOrBlank()) {
+                        // Reset intent agar tidak navigasi berulang saat rotate screen
+                        intent.removeExtra("TARGET_ROUTE")
+
+                        // Beri sedikit delay agar NavHost siap
+                        kotlinx.coroutines.delay(500)
+                        try {
+                            navController.navigate(targetRoute)
+                        } catch (e: Exception) {
+                            e.printStackTrace() // Handle jika rute tidak ditemukan
+                        }
+                    }
+                }
+
+                GlobalNotificationObserver()
 
                 // 2. Request Izin Notifikasi (Khusus Android 13+)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

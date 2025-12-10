@@ -124,21 +124,36 @@ class AdminQueueMonitorViewModel(
 
     fun submitMedicalRecord(
         queueId: String, weight: Double, height: Double, bp: String, temp: Double,
-        physical: String, diagnosis: String, prescription: String, notes: String,
+        physical: String, diagnosis: String, treatment: String,
+        prescription: String, notes: String,
         onSuccess: () -> Unit
     ) {
         viewModelScope.launch {
+            if (diagnosis.isBlank()) {
+                ToastManager.showToast("Diagnosa wajib diisi!", ToastType.ERROR)
+                return@launch
+            }
+
             val medicalData = mapOf(
-                "weightKg" to weight, "heightCm" to height, "bloodPressure" to bp,
-                "temperature" to temp, "physicalExam" to physical, "diagnosis" to diagnosis,
-                "prescription" to prescription, "doctorNotes" to notes
+                "weightKg" to weight,
+                "heightCm" to height,
+                "bloodPressure" to bp,
+                "temperature" to temp,
+                "physicalExam" to physical,
+                "diagnosis" to diagnosis,
+                "treatment" to treatment,
+                "prescription" to prescription,
+                "doctorNotes" to notes
             )
+
             val result = queueRepository.submitMedicalRecord(queueId, medicalData)
+
             if (result.isSuccess) {
-                ToastManager.showToast("✅ Rekam Medis Tersimpan", ToastType.SUCCESS)
+                ToastManager.showToast("✅ Rekam Medis Berhasil Disimpan", ToastType.SUCCESS)
                 onSuccess()
             } else {
-                ToastManager.showToast("❌ Gagal menyimpan data", ToastType.ERROR)
+                val errorMsg = result.exceptionOrNull()?.message ?: "Gagal menyimpan data"
+                ToastManager.showToast("❌ Gagal: $errorMsg", ToastType.ERROR)
             }
         }
     }

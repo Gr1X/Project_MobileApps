@@ -5,6 +5,7 @@ import android.util.Patterns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.project_mobileapps.data.model.Gender
 import com.example.project_mobileapps.data.model.User
 import com.example.project_mobileapps.data.repo.AuthRepository
 import kotlinx.coroutines.delay
@@ -13,6 +14,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.example.project_mobileapps.ui.components.ToastManager
+import com.example.project_mobileapps.ui.components.ToastType
+import com.example.project_mobileapps.utils.PasswordStrength
+import com.example.project_mobileapps.utils.ValidationResult
+import com.example.project_mobileapps.utils.Validator
 
 /**
  * Model data (UI State) untuk layar Auth.
@@ -43,7 +49,14 @@ data class AuthState(
     // --- STATE VERIFIKASI EMAIL (BARU) ---
     val showVerificationDialog: Boolean = false, // Menampilkan layar tunggu
     val isVerifying: Boolean = false,            // Status sedang polling/menunggu klik
-    val isVerifiedSuccess: Boolean = false       // Trigger animasi sukses (Checklist)
+    val isVerifiedSuccess: Boolean = false,
+
+    val confirmPassword: String = "",
+    val confirmPasswordError: String? = null,
+    val passwordStrength: PasswordStrength = PasswordStrength.NONE,
+
+    val isPrivacyAccepted: Boolean = false,
+    val privacyError: String? = null,
 )
 
 class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
@@ -65,12 +78,28 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
         _authState.update { it.copy(registerEmail = v, registerEmailError = null, error = null) }
     }
     fun onRegisterPasswordChange(v: String) {
-        _authState.update { it.copy(registerPassword = v, registerPasswordError = null, error = null) }
+        val strength = Validator.checkPasswordStrength(v)
+        _authState.update {
+            it.copy(
+                registerPassword = v,
+                registerPasswordError = null,
+                passwordStrength = strength
+            )
+        }
     }
+
     fun onRegisterPhoneChange(v: String) {
         if (v.all { it.isDigit() || it == '+' }) {
             _authState.update { it.copy(registerPhone = v, registerPhoneError = null, error = null) }
         }
+    }
+
+    fun onConfirmPasswordChange(v: String) {
+        _authState.update { it.copy(confirmPassword = v, confirmPasswordError = null) }
+    }
+
+    fun onPrivacyChange(isAccepted: Boolean) {
+        _authState.update { it.copy(isPrivacyAccepted = isAccepted, privacyError = null) }
     }
 
     // --- GOOGLE SIGN IN ---
@@ -88,103 +117,147 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
     // --- LOGIN BIASA ---
     fun loginUser() {
         val email = _authState.value.loginEmail.trim()
-        val pass = _authState.value.loginPassword.trim()
+        val pass = _authState.value.loginPassword
 
         if (email.isBlank() || pass.isBlank()) {
             _authState.update {
                 it.copy(
-                    loginEmailError = if(email.isBlank()) "Email wajib diisi" else null,
-                    loginPasswordError = if(pass.isBlank()) "Password wajib diisi" else null
+                    loginEmailError = if(email.isBlank()) "Wajib diisi" else null,
+                    loginPasswordError = if(pass.isBlank()) "Wajib diisi" else null
                 )
             }
             return
         }
 
         viewModelScope.launch {
-            _authState.update { it.copy(isLoading = true, error = null) }
-            val result = authRepository.login(email, pass)
-            result.fold(
-                onSuccess = { user -> _authState.update { it.copy(isLoading = false, loggedInUser = user) } },
-                onFailure = { exception -> _authState.update { it.copy(isLoading = false, error = exception.message) } }
-            )
+            _authState.update { it.copy(isLoading = true) }
+            try {
+                val result = authRepository.login(email, pass)
+                result.fold(
+                    onSuccess = { user ->
+                        _authState.update { it.copy(isLoading = false, loggedInUser = user) }
+                    },
+                    onFailure = { e ->
+                        val msg = mapFirebaseError(e)
+                        _authState.update { it.copy(isLoading = false) }
+                        ToastManager.showToast(msg, ToastType.ERROR)
+                    }
+                )
+            } catch (e: Exception) {
+                _authState.update { it.copy(isLoading = false) }
+                ToastManager.showToast("Koneksi gagal. Periksa internet Anda.", ToastType.ERROR)
+            }
         }
     }
 
-    // --- REGISTER (VERIFIKASI EMAIL AUTO-DETECT) ---
     fun registerUser() {
         val state = _authState.value
-        val name = state.registerName.trim()
-        val email = state.registerEmail.trim()
-        val pass = state.registerPassword.trim()
-        val phone = state.registerPhone.trim()
 
-        // Validasi
-        val isNameValid = name.isNotBlank()
-        val isEmailValid = Patterns.EMAIL_ADDRESS.matcher(email).matches()
-        val isPasswordValid = pass.length >= 6
+        // 1. Validasi Input
+        val nameResult = Validator.validateName(state.registerName)
+        val emailResult = Validator.validateEmail(state.registerEmail)
+        val phoneResult = Validator.validatePhone(state.registerPhone)
+        val passResult = Validator.validatePassword(state.registerPassword)
+        val confirmResult = Validator.validateConfirmPassword(state.registerPassword, state.confirmPassword)
 
-        if (!isNameValid || !isEmailValid || !isPasswordValid) {
+        _authState.update {
+            it.copy(registerNameError = null, registerEmailError = null, registerPhoneError = null, registerPasswordError = null, confirmPasswordError = null, privacyError = null)
+        }
+
+        val hasError = listOf(nameResult, emailResult, phoneResult, passResult, confirmResult).any { it is ValidationResult.Error }
+
+        if (hasError) {
             _authState.update {
                 it.copy(
-                    registerNameError = if (!isNameValid) "Nama wajib diisi" else null,
-                    registerEmailError = if (!isEmailValid) "Format email salah" else null,
-                    registerPasswordError = if (!isPasswordValid) "Password min 6 karakter" else null
+                    registerNameError = (nameResult as? ValidationResult.Error)?.message,
+                    registerEmailError = (emailResult as? ValidationResult.Error)?.message,
+                    registerPhoneError = (phoneResult as? ValidationResult.Error)?.message,
+                    registerPasswordError = (passResult as? ValidationResult.Error)?.message,
+                    confirmPasswordError = (confirmResult as? ValidationResult.Error)?.message
                 )
             }
             return
         }
 
-        viewModelScope.launch {
-            _authState.update { it.copy(isLoading = true, error = null) }
+        if (!state.isPrivacyAccepted) {
+            _authState.update { it.copy(privacyError = "Anda harus menyetujui Syarat & Ketentuan") }
+            return
+        }
 
-            // Panggil Repository: Buat Akun & Kirim Email Link
-            val result = authRepository.register(
-                name = name,
-                email = email,
-                pass = pass,
-                phone = phone
+        // 2. Eksekusi
+        viewModelScope.launch {
+            _authState.update { it.copy(isLoading = true) }
+
+            // Tahap 1: Auth Only (Belum simpan ke Firestore)
+            val result = authRepository.registerAuthOnly(
+                name = state.registerName.trim(),
+                email = state.registerEmail.trim(),
+                pass = state.registerPassword,
+                phone = state.registerPhone.trim(),
+                gender = Gender.PRIA, // Default, atau tambahkan input gender di register
+                dob = "N/A"
             )
 
             result.fold(
                 onSuccess = {
-                    // SUKSES: Tampilkan layar tunggu & Mulai Polling
-                    _authState.update {
-                        it.copy(
-                            isLoading = false,
-                            showVerificationDialog = true, // Tampilkan VerificationWaitingScreen
-                            isVerifying = true             // Flag untuk loop polling
-                        )
-                    }
-                    startVerificationCheck() // Mulai cek status di background
+                    // Sukses Auth -> Tampilkan Dialog Tunggu -> Mulai Polling
+                    _authState.update { it.copy(isLoading = false, showVerificationDialog = true, isVerifying = true) }
+                    startVerificationCheck()
                 },
                 onFailure = { e ->
-                    _authState.update { it.copy(isLoading = false, error = e.message) }
+                    // Handle Error (Termasuk Email Already In Use)
+                    val msg = mapFirebaseError(e)
+                    _authState.update { it.copy(isLoading = false) }
+                    ToastManager.showToast(msg, ToastType.ERROR)
                 }
             )
         }
     }
 
-    // --- LOGIKA POLLING (MAGIC LOGIN) ---
     private fun startVerificationCheck() {
         viewModelScope.launch {
-            // Loop selama status isVerifying masih true
             while (_authState.value.isVerifying) {
                 delay(3000) // Cek setiap 3 detik
 
-                val user = authRepository.reloadUser() // Cek ke Firebase apakah sudah verified
-                if (user != null) {
-                    // USER SUDAH KLIK LINK!
-                    _authState.update {
-                        it.copy(
-                            isVerifying = false,       // Stop looping
-                            isVerifiedSuccess = true,  // Trigger Animasi Centang
-                            loggedInUser = user        // Data user siap
-                        )
-                    }
-                    break // Keluar loop
+                val isVerified = authRepository.reloadUser()
+
+                if (isVerified) {
+                    // EMAIL TERVERIFIKASI! -> TAHAP 2: SIMPAN KE FIRESTORE
+                    saveUserToFirestoreAndLogin()
+                    break
                 }
             }
         }
+    }
+
+    private suspend fun saveUserToFirestoreAndLogin() {
+        val state = _authState.value
+        val firebaseUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+
+        val result = authRepository.saveUserToFirestore(
+            uid = firebaseUid,
+            name = state.registerName.trim(),
+            email = state.registerEmail.trim(),
+            phone = state.registerPhone.trim(),
+            gender = Gender.PRIA,
+            dob = "N/A"
+        )
+
+        result.fold(
+            onSuccess = { user ->
+                _authState.update {
+                    it.copy(
+                        isVerifying = false,
+                        isVerifiedSuccess = true,
+                        loggedInUser = user // Trigger Navigasi Masuk
+                    )
+                }
+            },
+            onFailure = { e ->
+                _authState.update { it.copy(isVerifying = false, showVerificationDialog = false) }
+                ToastManager.showToast("Gagal menyimpan data: ${e.message}", ToastType.ERROR)
+            }
+        )
     }
 
     // Dipanggil jika user menekan "Kembali" atau "Salah Email" di layar tunggu
@@ -198,7 +271,55 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
         }
     }
 
+    // Helper untuk menerjemahkan error teknis ke bahasa manusia
+    private fun mapFirebaseError(e: Throwable): String {
+        val msg = e.message?.lowercase() ?: ""
+        return when {
+            msg.contains("network") -> "Koneksi internet bermasalah."
+            msg.contains("email address is already in use") -> "Email sudah terdaftar. Silakan Login."
+            msg.contains("badly formatted") -> "Format email salah."
+            msg.contains("user-not-found") -> "Akun tidak ditemukan."
+            msg.contains("wrong-password") -> "Password salah."
+            msg.contains("email belum diverifikasi") -> "Email belum diverifikasi. Cek inbox Anda."
+            else -> e.message ?: "Terjadi kesalahan."
+        }
+    }
+
     fun resetAuthState() { _authState.value = AuthState() }
+
+    fun resetPassword(email: String, onDismissDialog: () -> Unit) {
+        // 1. Validasi Email Kosong
+        if (email.isBlank()) {
+            ToastManager.showToast("Masukkan email Anda terlebih dahulu", ToastType.ERROR)
+            return
+        }
+
+        // 2. Validasi Format Email
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            ToastManager.showToast("Format email tidak valid", ToastType.ERROR)
+            return
+        }
+
+        viewModelScope.launch {
+            // Gunakan loading global atau buat state baru khusus dialog
+            // Disini kita pakai Toast loading sederhana agar UX tidak nge-freeze
+            ToastManager.showToast("Mengirim link reset...", ToastType.INFO)
+
+            val result = authRepository.sendPasswordResetEmail(email)
+
+            result.fold(
+                onSuccess = {
+                    ToastManager.showToast("Link reset terkirim ke email Anda!", ToastType.SUCCESS)
+                    onDismissDialog() // Tutup dialog jika sukses
+                },
+                onFailure = { e ->
+                    // Handle jika email tidak terdaftar atau error network
+                    val msg = mapFirebaseError(e)
+                    ToastManager.showToast(msg, ToastType.ERROR)
+                }
+            )
+        }
+    }
 }
 
 class AuthViewModelFactory : ViewModelProvider.Factory {

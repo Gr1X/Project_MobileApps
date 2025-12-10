@@ -11,6 +11,16 @@ android {
     namespace = "com.example.project_mobileapps"
     compileSdk = 36
 
+//    signingConfigs {
+//        create("debug") {
+//            // Mengarah ke file yang Anda copy tadi di folder app
+//            storeFile = file("debug.keystore")
+//            storePassword = "android"
+//            keyAlias = "androiddebugkey"
+//            keyPassword = "android"
+//        }
+//    }
+
     defaultConfig {
         applicationId = "com.example.project_mobileapps"
         minSdk = 26
@@ -28,6 +38,10 @@ android {
     }
 
     buildTypes {
+//        getByName("debug") {
+//            signingConfig = signingConfigs.getByName("debug")
+//        }
+
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -65,7 +79,7 @@ dependencies {
     implementation("com.cloudinary:cloudinary-android:2.5.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("com.google.android.gms:play-services-auth:20.7.0")
-
+    implementation("com.google.android.gms:play-services-location:21.0.1")
     implementation(libs.androidx.compose.material.icons.extended)
 
     // Networking Libraries

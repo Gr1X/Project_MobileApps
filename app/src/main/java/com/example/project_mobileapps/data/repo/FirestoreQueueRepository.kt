@@ -311,15 +311,24 @@ object FirestoreQueueRepository : QueueRepository {
             val docRef = queuesCollection.document(queueId)
 
             firestore.runTransaction { transaction ->
+                // [PERBAIKAN] 1. BACA DULU (READ)
+                // Pindahkan ini ke paling atas sebelum melakukan update apa pun
+                val practiceSnapshot = transaction.get(practiceStatusDoc)
+                val totalServed = practiceSnapshot.getLong("totalServed") ?: 0
+
+                // [PERBAIKAN] 2. BARU LAKUKAN TULIS (WRITE)
                 val updates = medicalData.toMutableMap()
                 updates["status"] = QueueStatus.SELESAI.name
                 updates["finishedAt"] = Date()
 
+                // Update dokumen antrian
                 transaction.update(docRef, updates)
 
-                val practiceSnapshot = transaction.get(practiceStatusDoc)
-                val totalServed = practiceSnapshot.getLong("totalServed") ?: 0
+                // Update status praktik
                 transaction.update(practiceStatusDoc, "totalServed", totalServed + 1)
+
+                // Opsional: Cek dulu apakah currentServing memang nomor ini sebelum di-nol-kan,
+                // tapi untuk sekarang di-nol-kan langsung aman.
                 transaction.update(practiceStatusDoc, "currentServingNumber", 0)
             }.await()
 

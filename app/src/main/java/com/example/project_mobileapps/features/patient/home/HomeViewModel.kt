@@ -55,7 +55,6 @@ class HomeViewModel(
 
     init {
         fetchAllHomeData()
-        observeQueueForNotifications() // INI YANG PENTING
     }
 
     private fun getGreetingBasedOnTime(): String {
@@ -109,86 +108,6 @@ class HomeViewModel(
             while (true) {
                 queueRepository.checkForLatePatients(clinicId)
                 delay(30_000L) // Cek tiap 30 detik
-            }
-        }
-    }
-
-    // --- LOGIKA NOTIFIKASI (YANG DITANYAKAN) ---
-    private fun observeQueueForNotifications() {
-        viewModelScope.launch {
-            combine(
-                authRepository.currentUser,
-                queueRepository.dailyQueuesFlow,
-                queueRepository.practiceStatusFlow
-            ) { user, queues, statuses ->
-                Triple(user, queues, statuses)
-            }.collect { (user, queues, statuses) ->
-
-                val myId = user?.uid ?: return@collect
-                val practiceStatus = statuses[clinicId] ?: return@collect
-
-                // Cari antrian SAYA yang aktif
-                val myQueue = queues.find {
-                    it.userId == myId && (it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL)
-                }
-
-                if (myQueue != null) {
-                    val currentServing = practiceStatus.currentServingNumber
-                    val myNumber = myQueue.queueNumber
-                    val peopleAhead = myNumber - currentServing
-
-                    Log.d("DEBUG_NOTIF", "Antrian Saya: No $myNumber, Status: ${myQueue.status}. Orang di depan: $peopleAhead")
-
-                    // KASUS 1: BARU SAJA DIPANGGIL
-                    if (myQueue.status == QueueStatus.DIPANGGIL && lastNotifiedStatus != QueueStatus.DIPANGGIL) {
-                        Log.d("DEBUG_NOTIF", "🚀 MENCOBA KIRIM NOTIF: DIPANGGIL")
-
-                        NotificationHelper.showNotification(
-                            context,
-                            "GILIRAN ANDA!",
-                            "Silakan masuk ke ruang periksa sekarang."
-                        )
-                        // Simpan log ke DB notifikasi internal (Dropdown Lonceng)
-                        NotificationRepository.addNotification("Giliran Anda dipanggil! Segera masuk.")
-
-                        // Update state agar tidak spam
-                        lastNotifiedStatus = QueueStatus.DIPANGGIL
-                    }
-
-                    // KASUS 2: MENDEKATI GILIRAN (3, 2, 1 orang lagi)
-                    // Cek: Apakah nomor yang dilayani berubah? Jika ya, cek apakah perlu notif?
-                    if (myQueue.status == QueueStatus.MENUNGGU && currentServing != lastNotifiedQueueNumber) {
-
-                        if (peopleAhead == 3) {
-                            Log.d("DEBUG_NOTIF", "🚀 MENCOBA KIRIM NOTIF: SISA 3")
-                            NotificationHelper.showNotification(context, "Siap-siap!", "Tersisa 3 antrian lagi.")
-                            NotificationRepository.addNotification("Tersisa 3 antrian lagi sebelum giliran Anda.")
-                            lastNotifiedQueueNumber = currentServing
-                        }
-                        else if (peopleAhead == 2) {
-                            Log.d("DEBUG_NOTIF", "🚀 MENCOBA KIRIM NOTIF: SISA 2")
-                            NotificationHelper.showNotification(context, "Mendekati Giliran", "Hanya 2 orang lagi.")
-                            NotificationRepository.addNotification("Tersisa 2 antrian lagi.")
-                            lastNotifiedQueueNumber = currentServing
-                        }
-                        else if (peopleAhead == 1) {
-                            Log.d("DEBUG_NOTIF", "🚀 MENCOBA KIRIM NOTIF: SISA 1")
-                            NotificationHelper.showNotification(context, "Segera Masuk", "Giliran Anda berikutnya!")
-                            NotificationRepository.addNotification("Giliran Anda berikutnya! Mohon bersiap.")
-                            lastNotifiedQueueNumber = currentServing
-                        }
-                    }
-
-                    // Reset status notifikasi DIPANGGIL jika status kembali ke MENUNGGU (misal dokter cancel panggil)
-                    if (myQueue.status == QueueStatus.MENUNGGU) {
-                        lastNotifiedStatus = QueueStatus.MENUNGGU
-                    }
-
-                } else {
-                    // Jika antrian selesai/batal, reset semua
-                    lastNotifiedStatus = null
-                    lastNotifiedQueueNumber = -1
-                }
             }
         }
     }

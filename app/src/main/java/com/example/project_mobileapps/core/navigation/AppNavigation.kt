@@ -27,6 +27,9 @@ import com.example.project_mobileapps.features.doctor.DoctorViewModel
 import com.example.project_mobileapps.features.doctor.DoctorViewModelFactory
 import com.example.project_mobileapps.features.patient.doctorDetail.DoctorDetailScreen
 import com.example.project_mobileapps.features.getstarted.GetStartedScreen
+import com.example.project_mobileapps.features.patient.history.MedicalRecordResultScreen
+import com.example.project_mobileapps.features.patient.history.MedicalRecordResultViewModel
+import com.example.project_mobileapps.features.patient.history.MedicalRecordResultViewModelFactory
 import com.example.project_mobileapps.features.patient.home.MainScreen
 import com.example.project_mobileapps.features.patient.news.ArticleDetailScreen
 import com.example.project_mobileapps.features.patient.news.NewsScreen
@@ -154,55 +157,28 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 HistoryScreen(
                     onNavigateBack = { navController.popBackStack() },
                     onHistoryClick = { item ->
-                        // Catatan tentang URL Encoding:
-                        // Argumen string yang dilewatkan melalui route navigation tidak boleh mengandung karakter
-                        // seperti spasi atau simbol lain. Oleh karena itu, kita perlu meng-encode setiap parameter
-                        // sebelum membangun string route.
-                        val encoder = { text: String -> URLEncoder.encode(text, StandardCharsets.UTF_8.toString()) }
-
-                        val route = "historyDetail/" +
-                                "${encoder(item.visitId)}/" +
-                                "${encoder(item.visitDate)}/" +
-                                "${encoder(item.doctorName)}/" +
-                                "${encoder(item.initialComplaint)}/" +
-                                "${encoder(item.status.name)}"
-
-                        navController.navigate(route)
+                        // [PERBAIKAN] Sekarang kita hanya kirim ID saja, lebih bersih
+                        navController.navigate("medical_record_result/${item.visitId}")
                     }
                 )
             }
 
-            // Layar detail riwayat kunjungan, menerima beberapa argumen.
             composable(
-                route = "historyDetail/{visitId}/{visitDate}/{doctorName}/{complaint}/{status}",
-                arguments = listOf(
-                    navArgument("visitId") { type = NavType.StringType },
-                    navArgument("visitDate") { type = NavType.StringType },
-                    navArgument("doctorName") { type = NavType.StringType },
-                    navArgument("complaint") { type = NavType.StringType },
-                    navArgument("status") { type = NavType.StringType }
-                )
+                route = "medical_record_result/{visitId}",
+                arguments = listOf(navArgument("visitId") { type = NavType.StringType })
             ) { backStackEntry ->
-                val arguments = backStackEntry.arguments ?: return@composable
-                val decoder = { arg: String -> URLDecoder.decode(arg, StandardCharsets.UTF_8.toString()) }
+                val visitId = backStackEntry.arguments?.getString("visitId") ?: ""
 
-                val visitId = decoder(arguments.getString("visitId", ""))
-                val visitDate = decoder(arguments.getString("visitDate", ""))
-                val doctorName = decoder(arguments.getString("doctorName", ""))
-                val complaint = decoder(arguments.getString("complaint", ""))
-                // Mengkonversi string status kembali menjadi enum QueueStatus.
-                val status = try {
-                    QueueStatus.valueOf(decoder(arguments.getString("status", "SELESAI")))
-                } catch (e: IllegalArgumentException) {
-                    QueueStatus.SELESAI // Default value jika terjadi error.
-                }
+                // Inisialisasi ViewModel dengan Factory
+                val viewModel: MedicalRecordResultViewModel = viewModel(
+                    factory = MedicalRecordResultViewModelFactory(
+                        AppContainer.queueRepository,
+                        visitId
+                    )
+                )
 
-                HistoryDetailScreen(
-                    visitId = visitId,
-                    visitDate = visitDate,
-                    doctorName = doctorName,
-                    complaint = complaint,
-                    status = status,
+                MedicalRecordResultScreen(
+                    viewModel = viewModel,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
