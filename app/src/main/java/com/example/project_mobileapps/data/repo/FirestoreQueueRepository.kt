@@ -267,7 +267,7 @@ object FirestoreQueueRepository : QueueRepository {
             val candidates = snapshot.toObjects(QueueItem::class.java)
 
             if (candidates.isNotEmpty()) {
-                // 3. SORTING PRIORITAS (THE MAGIC FIX 🪄)
+                // 3. SORTING PRIORITAS (THE MAGIC FIX 🪄 )
                 // Urutan:
                 // A. Yang 'hasBeenLate' = false (Belum pernah telat) DULUAN
                 // B. Baru urutkan berdasarkan Nomor Antrian
