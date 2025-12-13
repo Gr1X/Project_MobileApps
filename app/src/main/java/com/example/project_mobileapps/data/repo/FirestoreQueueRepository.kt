@@ -82,10 +82,9 @@ object FirestoreQueueRepository : QueueRepository {
             if (snapshot != null) {
                 val queues = snapshot.toObjects(QueueItem::class.java)
 
-                // LOGIKA SORTING BARU:
                 val sortedList = queues.sortedWith(
                     compareBy<QueueItem> {
-                        // 1. Urutkan Status: DILAYANI > DIPANGGIL > MENUNGGU
+                        // 1. Prioritas Status (Tetap Sama)
                         when (it.status) {
                             QueueStatus.DILAYANI -> 1
                             QueueStatus.DIPANGGIL -> 2
@@ -93,10 +92,13 @@ object FirestoreQueueRepository : QueueRepository {
                             else -> 4
                         }
                     }.thenBy {
-                        // 2. Penalty: Jika MENUNGGU & Pernah Telat -> Lempar ke Belakang (Value 1)
-                        if (it.status == QueueStatus.MENUNGGU && it.hasBeenLate) 1 else 0
+                        // 2. Sorting Waktu (Tetap Sama)
+                        // Pasien telat (createdAt baru) akan bersaing dengan pasien baru
+                        it.createdAt
                     }.thenBy {
-                        // 3. Sisanya urut nomor antrian biasa
+                        // [PERBAIKAN] 3. Tie-Breaker (Penentu Seri)
+                        // Jika createdAt sama persis (langka, tapi mungkin),
+                        // gunakan queueNumber sebagai penentu agar list stabil.
                         it.queueNumber
                     }
                 )
@@ -249,14 +251,9 @@ object FirestoreQueueRepository : QueueRepository {
 
     override suspend fun callNextPatient(doctorId: String): Result<Unit> {
         return try {
-            // 1. Cek & Tindak Pasien Telat TERLEBIH DAHULU (Synchronous)
-            // Ini memastikan data bersih sebelum memanggil orang baru
             checkForLatePatients(doctorId)
-
             val (startOfDay, endOfDay) = getTodayRange()
 
-            // 2. Ambil SEMUA pasien yang statusnya MENUNGGU
-            // Kita tidak pakai .limit(1) di sini, karena kita butuh sorting custom
             val snapshot = queuesCollection
                 .whereEqualTo("doctorId", doctorId)
                 .whereEqualTo("status", QueueStatus.MENUNGGU.name)
@@ -267,26 +264,22 @@ object FirestoreQueueRepository : QueueRepository {
             val candidates = snapshot.toObjects(QueueItem::class.java)
 
             if (candidates.isNotEmpty()) {
-                val nextPatient = candidates.sortedWith(
-                    compareBy<QueueItem> { it.hasBeenLate } // false (0) naik, true (1) turun
-                        .thenBy { it.queueNumber }          // urut nomor kecil ke besar
-                ).firstOrNull()
+                // [PERBAIKAN] Urutkan berdasarkan createdAt, bukan queueNumber
+                // Karena queueNumber bisa jadi tidak urut (misal No 1 dilempar ke belakang)
+                val nextPatient = candidates.sortedBy { it.createdAt }.firstOrNull()
 
                 if (nextPatient != null) {
                     val docRef = queuesCollection.document(nextPatient.id)
-
                     firestore.runTransaction { transaction ->
-                        // Double check status di dalam transaksi agar tidak bentrok
                         val freshSnapshot = transaction.get(docRef)
                         if (freshSnapshot.getString("status") == QueueStatus.MENUNGGU.name) {
                             transaction.update(docRef, "status", QueueStatus.DIPANGGIL.name)
-                            transaction.update(docRef, "calledAt", Date()) // Set waktu panggil SEKARANG
+                            transaction.update(docRef, "calledAt", Date())
                         }
                     }.await()
-
                     Result.success(Unit)
                 } else {
-                    Result.failure(Exception("Tidak ada antrian yang valid."))
+                    Result.failure(Exception("Tidak ada antrian valid."))
                 }
             } else {
                 Result.failure(Exception("Tidak ada antrian menunggu."))
@@ -450,7 +443,6 @@ object FirestoreQueueRepository : QueueRepository {
     // 5. HELPER / AUTOMATION (JANTUNG SISTEM OTOMATIS)
     // =================================================================
 
-    // Fungsi Utama: Cek Jam -> Buka/Tutup/Batal Otomatis
     private suspend fun runAutoScheduleCheck() {
         try {
             val schedule = getDoctorSchedule(doctorId)
@@ -466,6 +458,8 @@ object FirestoreQueueRepository : QueueRepository {
 
             val snapshot = practiceStatusDoc.get().await()
             val currentIsOpenInDb = snapshot.getBoolean("isPracticeOpen") ?: false
+            val currentStartDb = snapshot.getString("startTime") ?: ""
+            val currentEndDb = snapshot.getString("endTime") ?: ""
 
             if (todaySchedule != null && todaySchedule.isOpen) {
                 val (sh, sm) = todaySchedule.startTime.split(":").map { it.toInt() }
@@ -473,9 +467,9 @@ object FirestoreQueueRepository : QueueRepository {
                 val startMins = sh * 60 + sm
                 val endMins = eh * 60 + em
 
-                // Selalu update info jam agar UI sinkron
-                updates["startTime"] = todaySchedule.startTime
-                updates["endTime"] = todaySchedule.endTime
+                // [FIX] Cek apakah jam berubah, baru update map
+                if (currentStartDb != todaySchedule.startTime) updates["startTime"] = todaySchedule.startTime
+                if (currentEndDb != todaySchedule.endTime) updates["endTime"] = todaySchedule.endTime
 
                 if (nowMinutes in startMins..endMins) {
                     // MASUK JAM PRAKTIK: Buka Otomatis jika masih tutup
@@ -486,7 +480,6 @@ object FirestoreQueueRepository : QueueRepository {
                     // LEWAT JAM PRAKTIK: Tutup Otomatis jika masih buka
                     if (currentIsOpenInDb) {
                         updates["isPracticeOpen"] = false
-                        // BATALKAN SISA ANTRIAN KARENA SUDAH TUTUP
                         cancelRemainingQueues(doctorId)
                     }
                 }
@@ -498,8 +491,10 @@ object FirestoreQueueRepository : QueueRepository {
                 }
             }
 
+            // [FIX] Hanya write ke Firestore jika ada perubahan nyata
             if (updates.isNotEmpty()) {
                 practiceStatusDoc.update(updates).await()
+                Log.d("Repo", "Auto Schedule Updated: $updates")
             }
         } catch (e: Exception) { Log.e("Repo", "Auto Schedule Error", e) }
     }
@@ -646,12 +641,12 @@ object FirestoreQueueRepository : QueueRepository {
             val pStat = pStatSnapshot.toObject(PracticeStatus::class.java) ?: return
 
             val limitMinutes = if (pStat.patientCallTimeLimitMinutes > 0) pStat.patientCallTimeLimitMinutes else 15
-            val limitMs = limitMinutes * 60 * 1000L // Konversi ke Milidetik
+            val limitMs = limitMinutes * 60 * 1000L
             val now = Date().time
 
             // Cari pasien yang sedang DIPANGGIL
             val snapshot = queuesCollection
-                .whereEqualTo("doctorId", doctorId) // Pastikan filter dokter
+                .whereEqualTo("doctorId", doctorId)
                 .whereEqualTo("status", QueueStatus.DIPANGGIL.name)
                 .whereGreaterThanOrEqualTo("createdAt", start)
                 .whereLessThanOrEqualTo("createdAt", end)
@@ -662,38 +657,42 @@ object FirestoreQueueRepository : QueueRepository {
 
             for (doc in snapshot.documents) {
                 val calledAt = doc.getDate("calledAt")
-                val isAlreadyLate = doc.getBoolean("hasBeenLate") ?: false
-
-                // Jika calledAt null, anggap baru dipanggil sekarang (safety)
+                // Ambil count saat ini (default 0)
+                val currentMissedCount = doc.getLong("missedCallCount")?.toInt() ?: 0
                 val callTime = calledAt?.time ?: now
 
-                // LOGIKA WAKTU HABIS
+                // JIKA WAKTU HABIS
                 if (now - callTime > limitMs) {
                     hasUpdates = true
+                    val newCount = currentMissedCount + 1
 
-                    if (isAlreadyLate) {
-                        // KASUS 2: SUDAH PERNAH TELAT -> SEKARANG TELAT LAGI -> BATALKAN
-                        // "Kesempatan kedua sudah habis"
+                    if (newCount >= 3) {
+                        // KASUS: SUDAH 3 KALI TELAT -> BATAL OTOMATIS
                         batch.update(doc.reference, mapOf(
                             "status" to QueueStatus.DIBATALKAN.name,
-                            "doctorNotes" to "Sistem: Dibatalkan otomatis (Tidak hadir setelah 2x pemanggilan)"
+                            "missedCallCount" to newCount,
+                            "doctorNotes" to "Sistem: Dibatalkan otomatis (Tidak hadir setelah 3x pemanggilan)"
                         ))
-                        Log.d("FirestoreRepo", "🚫 Pasien ${doc.id} dibatalkan (Telat 2x).")
+                        Log.d("FirestoreRepo", "🚫 Pasien ${doc.id} dibatalkan (3x Strikes).")
                     } else {
-                        // KASUS 1: BARU PERTAMA KALI TELAT -> LEMPAR KE BELAKANG
-                        // Kembalikan ke MENUNGGU, tapi tandai hasBeenLate = true
-                        // Reset calledAt jadi null agar tidak memicu timer di UI
+                        // KASUS: TELAT KE-1 atau KE-2 -> LEMPAR KE BELAKANG
+                        // 1. Kembalikan status ke MENUNGGU
+                        // 2. Tambah missedCount
+                        // 3. Reset calledAt
+                        // 4. [KUNCI] Update createdAt jadi SEKARANG.
+                        //    Ini membuat dia seolah-olah baru daftar detik ini,
+                        //    jadi posisinya pindah ke paling belakang antrian SAAT INI.
                         batch.update(doc.reference, mapOf(
                             "status" to QueueStatus.MENUNGGU.name,
-                            "hasBeenLate" to true,
-                            "calledAt" to null
+                            "missedCallCount" to newCount,
+                            "calledAt" to null,
+                            "createdAt" to Date() // <--- INI MAGICNYA
                         ))
-                        Log.d("FirestoreRepo", "⚠️ Pasien ${doc.id} telat pertama. Pindah ke belakang.")
+                        Log.d("FirestoreRepo", "⚠️ Pasien ${doc.id} dipindah ke belakang (Strike $newCount).")
                     }
                 }
             }
 
-            // Commit semua perubahan sekaligus (Atomic)
             if (hasUpdates) {
                 batch.commit().await()
             }
@@ -740,10 +739,9 @@ object FirestoreQueueRepository : QueueRepository {
             cleanupOldQueues(doctorId) // Jalankan sekali saat app dibuka
 
             while (true) {
-                // LOGIKA OTOMATIS AKTIF KEMBALI DI SINI
                 runAutoScheduleCheck()
                 checkForLatePatients(doctorId)
-                delay(5_000L) // Cek setiap 30 detik
+                delay(30_000L) // UBAH JADI 30 DETIK (Lebih aman untuk baterai & kuota)
             }
         }
     }

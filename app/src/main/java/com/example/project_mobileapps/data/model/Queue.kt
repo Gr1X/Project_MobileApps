@@ -51,9 +51,10 @@ data class QueueItem(
     var startedAt: Date? = null,
     var finishedAt: Date? = null,
 
-    @get:PropertyName("hasBeenLate")
-    @set:PropertyName("hasBeenLate")
-    var hasBeenLate: Boolean = false,
+    // [PERBAIKAN] Ganti Boolean jadi Int untuk track jumlah pelanggaran
+    @get:PropertyName("missedCallCount")
+    @set:PropertyName("missedCallCount")
+    var missedCallCount: Int = 0, // Default 0
 
     // --- FIELD EMR (MEDICAL RECORD) ---
     // Pastikan ini ada agar repository tidak error
