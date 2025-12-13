@@ -539,7 +539,7 @@ fun MealPlanInputContent(state: MealPlanUiState, viewModel: SmartMealPlanViewMod
                     value = state.glucose,
                     onValueChange = viewModel::onGlucoseChange,
                     label = "Gula Darah (FGB)",
-                    unit = "mmol/L", // <-- SUDAH DIPERBAIKI
+                    unit = "mmol/L",
                     icon = Icons.Default.WaterDrop,
                     error = state.glucoseError,
                     placeholder = "Normal: 4.0 - 5.9"
@@ -549,7 +549,7 @@ fun MealPlanInputContent(state: MealPlanUiState, viewModel: SmartMealPlanViewMod
                 HealthInputRow(
                     value = state.insulin,
                     onValueChange = viewModel::onInsulinChange,
-                    label = "Insulin Puasa", // <-- KATA (Opsional) DIHAPUS
+                    label = "Insulin", // <-- KATA (Opsional) DIHAPUS
                     unit = "pmol/L",         // <-- SUDAH DIPERBAIKI
                     placeholder = "Normal: 18 - 173"
                 )
