@@ -90,7 +90,7 @@ class HomeViewModel(
                 _uiState.update {
                     it.copy(
                         greeting = getGreetingBasedOnTime(),
-                        userName = user?.name ?: "Pengguna",
+                        userName = user?.username?.ifBlank { user.name } ?: "Pengguna",
                         doctor = doctorRepository.getTheOnlyDoctor(),
                         activeQueue = activeQueue,
                         practiceStatus = practiceStatus,

@@ -87,6 +87,62 @@ object AuthRepository {
         }
     }
 
+    suspend fun registerInitial(username: String, email: String, pass: String): Result<String> {
+        return try {
+            val authResult = auth.createUserWithEmailAndPassword(email, pass).await()
+            val firebaseUser = authResult.user ?: throw Exception("Gagal membuat user")
+
+            // Simpan Username ke DisplayName Auth (Sementara)
+            val profileUpdates = com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                .setDisplayName(username)
+                .build()
+            firebaseUser.updateProfile(profileUpdates).await()
+
+            firebaseUser.sendEmailVerification().await()
+            Result.success(firebaseUser.uid)
+        } catch (e: FirebaseAuthUserCollisionException) {
+            Result.failure(Exception("Email sudah terdaftar."))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun completeUserProfile(
+        uid: String,
+        fullName: String,
+        gender: Gender,
+        dob: String,
+        phone: String
+    ): Result<User> {
+        return try {
+            val currentUserAuth = auth.currentUser
+            val email = currentUserAuth?.email ?: ""
+            // [PERBAIKAN] Ambil Username dari Auth DisplayName (yang diinput pas Register)
+            val savedUsername = currentUserAuth?.displayName ?: "User"
+
+            // Buat objek User lengkap dengan pemisahan Username & Nama Lengkap
+            val newUser = User(
+                uid = uid,
+                username = savedUsername, // Simpan Username murni
+                name = fullName,          // Simpan Nama Lengkap
+                email = email,
+                role = Role.PASIEN,
+                gender = gender,
+                dateOfBirth = dob,
+                phoneNumber = phone,
+                profilePictureUrl = ""
+            )
+
+            // Simpan ke Firestore
+            usersCollection.document(uid).set(newUser).await()
+
+            _currentUser.value = newUser
+            Result.success(newUser)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // --- REVISI: REGISTER TAHAP 2 (SIMPAN KE FIRESTORE) ---
     suspend fun saveUserToFirestore(
         uid: String, name: String, email: String,
@@ -122,13 +178,22 @@ object AuthRepository {
             val isWhitelisted = whiteListedEmails.contains(email)
 
             if (!firebaseUser.isEmailVerified && !isWhitelisted) {
-                auth.signOut() // Logout paksa
+                auth.signOut()
                 throw Exception("Email belum diverifikasi. Silakan cek inbox Anda.")
             }
 
             fetchUserData(firebaseUser.uid)
 
             val snapshot = usersCollection.document(firebaseUser.uid).get().await()
+
+            if (snapshot.exists()) {
+                val user = snapshot.toObject(User::class.java)
+                _currentUser.value = user
+                Result.success(user)
+            } else {
+                Result.success(null)
+            }
+
             val user = snapshot.toObject(User::class.java)
                 ?: throw Exception("Data user tidak ditemukan di database.")
 

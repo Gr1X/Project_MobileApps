@@ -13,10 +13,10 @@ class MealPlanRepository {
     suspend fun getPrediction(
         bmi: Double,
         age: Int,
-        glucose: Int,
+        glucose: Double, // <-- Ganti Int ke Double
         systolic: Int,
         diastolic: Int,
-        insulin: Int
+        insulin: Double
     ): Result<MealPlanResponse> {
         return try {
             // 1. Mapping Input UI ke Model Request API

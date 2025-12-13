@@ -2,6 +2,7 @@ package com.example.project_mobileapps.navigation
 
 import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -20,7 +21,9 @@ import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.di.AppContainer
 import com.example.project_mobileapps.features.admin.AdminMainScreen
 import com.example.project_mobileapps.features.auth.AuthScreen
+import com.example.project_mobileapps.features.auth.AuthViewModel
 import com.example.project_mobileapps.features.auth.AuthViewModelFactory
+import com.example.project_mobileapps.features.auth.CompleteProfileScreen
 import com.example.project_mobileapps.features.doctor.DoctorDashboardScreen
 import com.example.project_mobileapps.features.doctor.DoctorMainScreen
 import com.example.project_mobileapps.features.doctor.DoctorViewModel
@@ -57,11 +60,12 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
     // Secara dinamis menentukan tujuan awal aplikasi berdasarkan status login dan peran user.
     // Jika user belum login (null), arahkan ke alur otentikasi.
     // Jika sudah login, arahkan ke alur yang sesuai dengan perannya.
-    val startDestination = when (currentUser?.role) {
-        Role.PASIEN -> "main_flow"
-        Role.DOKTER -> "doctor_flow"
-        Role.ADMIN -> "admin_flow"
-        null -> "auth_flow"
+    val startDestination = when {
+        currentUser == null -> "auth_flow"
+        currentUser!!.role == Role.PASIEN -> "main_flow"
+        currentUser!!.role == Role.DOKTER -> "doctor_flow"
+        currentUser!!.role == Role.ADMIN -> "admin_flow"
+        else -> "auth_flow"
     }
 
     NavHost(navController = navController, startDestination = startDestination, modifier = modifier) {
@@ -88,9 +92,38 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                             Role.DOKTER -> "doctor_flow"
                             Role.ADMIN -> "admin_flow"
                         }
+                        // Reset back stack agar user tidak bisa kembali ke halaman login
                         navController.navigate(destination) { popUpTo("auth_flow") { inclusive = true } }
+                    },
+                    onNavigateToCompleteProfile = {
+                        navController.navigate("complete_profile")
                     }
                 )
+            }
+        }
+
+        composable("complete_profile") {
+            // Menggunakan ViewModel baru karena ini adalah "Screen" baru.
+            // ViewModel akan mengambil UID dari FirebaseAuth session yang sudah aktif.
+            val viewModel: AuthViewModel = viewModel(factory = AuthViewModelFactory())
+
+            CompleteProfileScreen(
+                viewModel = viewModel
+                // (Opsional) Tambah callback di CompleteProfileScreen:
+                // onSuccess = { user -> ... navigasi ke home ... }
+                // Tapi di AuthViewModel.submitCompleteProfile sudah mengupdate loggedInUser
+                // yang akan mentrigger navigasi di dalam CompleteProfileScreen jika Anda memasang observer di sana.
+                // Namun, cara yang lebih aman adalah AuthViewModel mengelola state navigasi.
+            )
+
+            // Observer di dalam Composable ini untuk pindah ke Home setelah sukses simpan
+            val authState by viewModel.authState.collectAsState()
+            LaunchedEffect(authState.loggedInUser) {
+                if (authState.loggedInUser != null) {
+                    navController.navigate("main_flow") {
+                        popUpTo("auth_flow") { inclusive = true }
+                    }
+                }
             }
         }
 
@@ -177,7 +210,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     )
                 )
 
-                MedicalRecordResultScreen(
+                    MedicalRecordResultScreen(
                     viewModel = viewModel,
                     onNavigateBack = { navController.popBackStack() }
                 )

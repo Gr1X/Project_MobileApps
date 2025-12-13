@@ -51,16 +51,13 @@ private enum class AuthTab { LOGIN, REGISTER }
 fun AuthScreen(
     authViewModel: AuthViewModel,
     startScreen: String,
-    onAuthSuccess: (User) -> Unit
+    onAuthSuccess: (User) -> Unit,
+    onNavigateToCompleteProfile: () -> Unit
 ) {
     val authState by authViewModel.authState.collectAsState()
     var selectedTab by remember { mutableStateOf(if (startScreen == "login") AuthTab.LOGIN else AuthTab.REGISTER) }
-    var rememberMe by remember { mutableStateOf(false) }
-
     val context = LocalContext.current
-
     var showForgotPassDialog by remember { mutableStateOf(false) }
-    // Activity tidak lagi wajib untuk Email Auth, tapi Google Sign In butuh context
 
     // --- SETUP GOOGLE SIGN IN ---
     val gso = remember {
@@ -88,11 +85,15 @@ fun AuthScreen(
         }
     }
 
-    // --- LOGIC NAVIGASI SUKSES (UPDATED) ---
-    // Cukup pantau loggedInUser. Jika tidak null, berarti Login/Register/Verifikasi Email sukses.
-    LaunchedEffect(authState.loggedInUser) {
+    // --- LOGIC NAVIGASI UTAMA ---
+    LaunchedEffect(authState.loggedInUser, authState.isProfileIncomplete) {
+        // Prioritas 1: Jika User Login & Lengkap -> Masuk Home
         if (authState.loggedInUser != null) {
             onAuthSuccess(authState.loggedInUser!!)
+        }
+        // Prioritas 2: Jika User Login tapi Belum Lengkap -> Masuk Halaman Lengkapi Data
+        else if (authState.isProfileIncomplete) {
+            onNavigateToCompleteProfile()
         }
     }
 
@@ -100,11 +101,7 @@ fun AuthScreen(
         ForgotPasswordDialog(
             onDismiss = { showForgotPassDialog = false },
             onSendClick = { email ->
-                // Panggil ViewModel untuk kirim email
-                authViewModel.resetPassword(email) {
-                    // Callback jika sukses: tutup dialog
-                    showForgotPassDialog = false
-                }
+                authViewModel.resetPassword(email) { showForgotPassDialog = false }
             }
         )
     }
@@ -116,8 +113,10 @@ fun AuthScreen(
             email = authState.registerEmail,
             isSuccess = authState.isVerifiedSuccess, // Trigger animasi centang hijau
             onAnimationFinished = {
-                // Saat animasi selesai, cek user lagi untuk navigasi
-                if (authState.loggedInUser != null) {
+                // Saat animasi selesai, cek mau kemana
+                if (authState.isProfileIncomplete) {
+                    onNavigateToCompleteProfile()
+                } else if (authState.loggedInUser != null) {
                     onAuthSuccess(authState.loggedInUser!!)
                 }
             },
@@ -163,33 +162,16 @@ fun AuthScreen(
                             emailError = authState.loginEmailError, passwordError = authState.loginPasswordError
                         )
                     } else {
-                        RegisterFields(
-                            // Data
+                        RegisterFieldsSimple(
                             name = authState.registerName, onNameChange = authViewModel::onRegisterNameChange,
                             email = authState.registerEmail, onEmailChange = authViewModel::onRegisterEmailChange,
-                            phone = authState.registerPhone, onPhoneChange = authViewModel::onRegisterPhoneChange,
-
-                            // Password Logic
-                            password = authState.registerPassword,
-                            onPasswordChange = authViewModel::onRegisterPasswordChange,
-                            confirmPassword = authState.confirmPassword,       // <--- Baru
-                            onConfirmPasswordChange = authViewModel::onConfirmPasswordChange, // <--- Baru
-                            passwordStrength = authState.passwordStrength,     // <--- Baru
-
-                            // Privacy Logic
-                            isPrivacyAccepted = authState.isPrivacyAccepted,   // <--- Baru
-                            onPrivacyChange = authViewModel::onPrivacyChange,  // <--- Baru
-
-                            // Errors
-                            nameError = authState.registerNameError,
-                            emailError = authState.registerEmailError,
-                            phoneError = authState.registerPhoneError,
-                            passwordError = authState.registerPasswordError,
-                            confirmPasswordError = authState.confirmPasswordError, // <--- Baru
-                            privacyError = authState.privacyError,             // <--- Baru
-
-                            // Action
-                            onDone = { authViewModel.registerUser() }
+                            password = authState.registerPassword, onPasswordChange = authViewModel::onRegisterPasswordChange,
+                            confirmPassword = authState.confirmPassword, onConfirmPasswordChange = authViewModel::onConfirmPasswordChange,
+                            passwordStrength = authState.passwordStrength,
+                            isPrivacyAccepted = authState.isPrivacyAccepted, onPrivacyChange = authViewModel::onPrivacyChange,
+                            nameError = authState.registerNameError, emailError = authState.registerEmailError,
+                            passwordError = authState.registerPasswordError, confirmPasswordError = authState.confirmPasswordError,
+                            privacyError = authState.privacyError
                         )
                     }
                 }
@@ -213,14 +195,8 @@ fun AuthScreen(
                 // --- TOMBOL UTAMA ---
                 Button(
                     onClick = {
-                        if (selectedTab == AuthTab.LOGIN) {
-                            authViewModel.loginUser()
-                        } else {
-                            // PERBAIKAN UTAMA DI SINI:
-                            // Panggil registerUser() untuk Verifikasi Email (Gratis)
-                            // Jangan panggil registerAndSendOtp() lagi (karena itu SMS berbayar)
-                            authViewModel.registerUser()
-                        }
+                        if (selectedTab == AuthTab.LOGIN) authViewModel.loginUser()
+                        else authViewModel.registerInitial() // Gunakan registerInitial (Auth Only)
                     },
                     enabled = !authState.isLoading,
                     modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -260,6 +236,8 @@ fun AuthScreen(
 
 // --- Helper Composables ---
 
+// (Sertakan juga fungsi-fungsi helper lama: AuthHeader, AuthTabSelector, LoginFields, DividerWithText, SocialLoginButton, PasswordStrengthBar)
+// Copy paste fungsi-fungsi helper tersebut dari file AuthScreen.kt sebelumnya.
 @Composable
 private fun AuthHeader(selectedTab: AuthTab) {
     val title = if (selectedTab == AuthTab.LOGIN) "Login ke Akun Anda" else "Buat Akun untuk Memulai"
@@ -307,7 +285,7 @@ private fun LoginFields(
     password: String, onPasswordChange: (String) -> Unit,
     emailError: String?, passwordError: String?
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { // Spacing lebih lega
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         PrimaryTextField(
             value = email,
             onValueChange = onEmailChange,
@@ -323,6 +301,40 @@ private fun LoginFields(
             leadingIcon = Icons.Outlined.Lock,
             errorMessage = passwordError
         )
+    }
+}
+
+@Composable
+private fun RegisterFieldsSimple(
+    name: String, onNameChange: (String) -> Unit,
+    email: String, onEmailChange: (String) -> Unit,
+    password: String, onPasswordChange: (String) -> Unit,
+    confirmPassword: String, onConfirmPasswordChange: (String) -> Unit,
+    passwordStrength: com.example.project_mobileapps.utils.PasswordStrength,
+    isPrivacyAccepted: Boolean, onPrivacyChange: (Boolean) -> Unit,
+    nameError: String?, emailError: String?, passwordError: String?, confirmPasswordError: String?, privacyError: String?
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        PrimaryTextField(value = name, onValueChange = onNameChange, label = "Username", leadingIcon = Icons.Outlined.Person, errorMessage = nameError)
+        PrimaryTextField(value = email, onValueChange = onEmailChange, label = "Email", leadingIcon = Icons.Outlined.Email, errorMessage = emailError, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            PasswordTextField(value = password, onValueChange = onPasswordChange, label = "Password", leadingIcon = Icons.Outlined.Lock, errorMessage = passwordError)
+            if (password.isNotEmpty()) PasswordStrengthBar(strength = passwordStrength)
+        }
+
+        PasswordTextField(value = confirmPassword, onValueChange = onConfirmPasswordChange, label = "Ulangi Password", leadingIcon = Icons.Outlined.LockClock, errorMessage = confirmPasswordError)
+
+        Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().clickable { onPrivacyChange(!isPrivacyAccepted) }
+            ) {
+                Checkbox(checked = isPrivacyAccepted, onCheckedChange = onPrivacyChange, colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary))
+                Text("Saya setuju dengan Syarat & Ketentuan.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
+            }
+            if (privacyError != null) Text(text = privacyError, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 12.dp))
+        }
     }
 }
 
@@ -345,20 +357,10 @@ private fun RegisterFields(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         PrimaryTextField(
-            value = name, onValueChange = onNameChange, label = "Nama Lengkap",
-            leadingIcon = Icons.Outlined.Person, errorMessage = nameError
-        )
-        PrimaryTextField(
             value = email, onValueChange = onEmailChange, label = "Alamat Email",
             leadingIcon = Icons.Outlined.Email, errorMessage = emailError,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
         )
-        PrimaryTextField(
-            value = phone, onValueChange = onPhoneChange, label = "Nomor Handphone",
-            leadingIcon = Icons.Outlined.Phone, errorMessage = phoneError,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
-        )
-        // --- PASSWORD UTAMA ---
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             PasswordTextField(
                 value = password, onValueChange = onPasswordChange, label = "Buat Password",

@@ -25,6 +25,7 @@ import com.example.project_mobileapps.utils.Validator
  * Disesuaikan untuk alur Verifikasi Email Auto-Detect.
  */
 data class AuthState(
+    val isProfileIncomplete: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null,
     val loggedInUser: User? = null,
@@ -57,6 +58,12 @@ data class AuthState(
 
     val isPrivacyAccepted: Boolean = false,
     val privacyError: String? = null,
+
+    val cpFullName: String = "",
+    val cpPhone: String = "",
+    val cpDob: String = "",
+    val cpGender: Gender = Gender.PRIA,
+    val cpError: String? = null
 )
 
 class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
@@ -135,7 +142,13 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
                 val result = authRepository.login(email, pass)
                 result.fold(
                     onSuccess = { user ->
-                        _authState.update { it.copy(isLoading = false, loggedInUser = user) }
+                        if (user != null) {
+                            // User Lengkap -> Masuk Home
+                            _authState.update { it.copy(isLoading = false, loggedInUser = user) }
+                        } else {
+                            // User Null (Auth sukses, Firestore kosong) -> Masuk Complete Profile
+                            _authState.update { it.copy(isLoading = false, isProfileIncomplete = true) }
+                        }
                     },
                     onFailure = { e ->
                         val msg = mapFirebaseError(e)
@@ -149,6 +162,115 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
             }
         }
     }
+
+    fun registerInitial() {
+        val state = _authState.value
+        // Validasi simpel (Username, Email, Pass)
+        if (state.registerName.isBlank() || state.registerEmail.isBlank() || state.registerPassword.isBlank()) {
+            ToastManager.showToast("Semua kolom wajib diisi", ToastType.ERROR)
+            return
+        }
+
+        viewModelScope.launch {
+            _authState.update { it.copy(isLoading = true) }
+            val result = authRepository.registerInitial(
+                state.registerName, // Di sini ini "Username"
+                state.registerEmail,
+                state.registerPassword
+            )
+            result.fold(
+                onSuccess = {
+                    _authState.update { it.copy(isLoading = false, showVerificationDialog = true, isVerifying = true) }
+                    startVerificationCheck()
+                },
+                onFailure = { e ->
+                    _authState.update { it.copy(isLoading = false) }
+                    ToastManager.showToast(e.message ?: "Gagal daftar", ToastType.ERROR)
+                }
+            )
+        }
+    }
+
+    // [NEW] Fungsi Submit Complete Profile
+    // [UPDATE] Fungsi Submit dengan Validasi Akhir yang Lebih Ketat
+    fun submitCompleteProfile() {
+        val state = _authState.value
+
+        // Validasi Nama
+        if (state.cpFullName.trim().length < 3) {
+            ToastManager.showToast("Nama terlalu pendek (min 3 huruf)", ToastType.ERROR)
+            return
+        }
+
+        // Validasi No HP (Minimal 9 digit setelah +62)
+        if (state.cpPhone.length < 9) {
+            ToastManager.showToast("Nomor HP tidak valid (terlalu pendek)", ToastType.ERROR)
+            return
+        }
+
+        if (state.cpDob.isBlank()) {
+            ToastManager.showToast("Tanggal lahir wajib diisi", ToastType.ERROR)
+            return
+        }
+
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+
+        // Format No HP untuk disimpan: +62812...
+        val formattedPhone = "+62${state.cpPhone}"
+
+        viewModelScope.launch {
+            _authState.update { it.copy(isLoading = true) }
+            val result = authRepository.completeUserProfile(
+                uid = uid,
+                fullName = state.cpFullName.trim(),
+                gender = state.cpGender,
+                dob = state.cpDob,
+                phone = formattedPhone // Simpan dengan format internasional
+            )
+            // ... (kode result fold sama seperti sebelumnya)
+            result.fold(
+                onSuccess = { user ->
+                    _authState.update { it.copy(isLoading = false, isProfileIncomplete = false, loggedInUser = user) }
+                },
+                onFailure = { e ->
+                    _authState.update { it.copy(isLoading = false) }
+                    ToastManager.showToast("Gagal simpan: ${e.message}", ToastType.ERROR)
+                }
+            )
+        }
+    }
+
+    // Setter untuk Form Complete Profile
+    fun onCpNameChange(input: String) {
+        // 1. Filter: Hanya izinkan Huruf dan Spasi
+        // User tidak bisa mengetik angka atau simbol aneh
+        if (input.all { it.isLetter() || it.isWhitespace() }) {
+            _authState.update {
+                it.copy(
+                    cpFullName = input,
+                    // Validasi panjang minimal saat mengetik (opsional)
+                    cpError = if (input.length > 50) "Nama terlalu panjang" else null
+                )
+            }
+        }
+    }
+    fun onCpPhoneChange(input: String) {
+        // 1. Filter: Hanya Angka
+        var sanitized = input.filter { it.isDigit() }
+
+        // 2. UX: Jika user mengetik "08...", hapus "0" di depan
+        // Karena di UI sudah ada prefix "+62"
+        if (sanitized.startsWith("0")) {
+            sanitized = sanitized.removePrefix("0")
+        }
+
+        // 3. Limitasi: Maksimal 13 digit (standar no HP Indo tanpa 0)
+        if (sanitized.length > 13) return
+
+        _authState.update { it.copy(cpPhone = sanitized) }
+    }
+    fun onCpDobChange(v: String) { _authState.update { it.copy(cpDob = v) } }
+    fun onCpGenderChange(v: Gender) { _authState.update { it.copy(cpGender = v) } }
 
     fun registerUser() {
         val state = _authState.value
@@ -217,13 +339,16 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
     private fun startVerificationCheck() {
         viewModelScope.launch {
             while (_authState.value.isVerifying) {
-                delay(3000) // Cek setiap 3 detik
-
+                delay(3000)
                 val isVerified = authRepository.reloadUser()
-
                 if (isVerified) {
-                    // EMAIL TERVERIFIKASI! -> TAHAP 2: SIMPAN KE FIRESTORE
-                    saveUserToFirestoreAndLogin()
+                    _authState.update {
+                        it.copy(
+                            isVerifying = false,
+                            showVerificationDialog = false,
+                            isProfileIncomplete = true
+                        )
+                    }
                     break
                 }
             }

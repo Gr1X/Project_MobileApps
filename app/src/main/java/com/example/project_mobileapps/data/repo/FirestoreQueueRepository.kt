@@ -267,10 +267,6 @@ object FirestoreQueueRepository : QueueRepository {
             val candidates = snapshot.toObjects(QueueItem::class.java)
 
             if (candidates.isNotEmpty()) {
-                // 3. SORTING PRIORITAS (THE MAGIC FIX 🪄 )
-                // Urutan:
-                // A. Yang 'hasBeenLate' = false (Belum pernah telat) DULUAN
-                // B. Baru urutkan berdasarkan Nomor Antrian
                 val nextPatient = candidates.sortedWith(
                     compareBy<QueueItem> { it.hasBeenLate } // false (0) naik, true (1) turun
                         .thenBy { it.queueNumber }          // urut nomor kecil ke besar

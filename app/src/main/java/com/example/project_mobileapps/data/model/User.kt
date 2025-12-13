@@ -45,6 +45,7 @@ enum class Role {
  */
 data class User(
     val uid: String = "",
+    val username: String = "",
     val name: String = "",
     val email: String = "",
     @get:Exclude val password: String? = null,

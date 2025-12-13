@@ -25,9 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-import com.example.project_mobileapps.R // Pastikan import ini sesuai package Anda
-
-// Model Data Banner dengan Image Resource ID (Int)
+import com.example.project_mobileapps.R
 data class BannerModel(
     val title: String,
     val subtitle: String,
@@ -37,8 +35,6 @@ data class BannerModel(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeBanner() {
-    // DATA DUMMY (Pastikan Anda punya file gambar ini di folder res/drawable)
-    // Jika error merah, ganti R.drawable.banner_1 dengan R.drawable.ic_launcher_background
     val banners = listOf(
         BannerModel(
             title = "Booking Mudah",
@@ -59,7 +55,6 @@ fun HomeBanner() {
 
     val pagerState = rememberPagerState(pageCount = { banners.size })
 
-    // Efek Auto-Scroll
     LaunchedEffect(Unit) {
         while (true) {
             delay(5000)

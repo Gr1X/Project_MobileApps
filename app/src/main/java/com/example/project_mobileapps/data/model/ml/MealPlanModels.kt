@@ -12,10 +12,12 @@ import com.squareup.moshi.Json
 data class MealPlanRequest(
     @Json(name = "bmi") val bmi: Double,
     @Json(name = "age") val age: Int,
-    @Json(name = "fgb") val glucose: Int,          // Fasting Glucose Blood
-    @Json(name = "avg_systolyc") val systolic: Int, // API pakai 'y', kita mapping ke 'systolic'
-    @Json(name = "avg_dystolyc") val diastolic: Int,// API pakai 'y', kita mapping ke 'diastolic'
-    @Json(name = "insulin") val insulin: Int
+    // [PERBAIKAN] Ubah Int -> Double agar support desimal (mmol/L)
+    @Json(name = "fgb") val glucose: Double,
+    @Json(name = "avg_systolyc") val systolic: Int,
+    @Json(name = "avg_dystolyc") val diastolic: Int,
+    // [PERBAIKAN] Ubah Int -> Double (pmol/L)
+    @Json(name = "insulin") val insulin: Double
 )
 
 // =================================================================
