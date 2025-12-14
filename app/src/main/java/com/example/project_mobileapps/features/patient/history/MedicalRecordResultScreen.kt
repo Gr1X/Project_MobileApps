@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -19,10 +20,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.project_mobileapps.utils.PdfGenerator
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.pow
@@ -34,6 +37,7 @@ fun MedicalRecordResultScreen(
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -42,6 +46,23 @@ fun MedicalRecordResultScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Kembali")
+                    }
+                },
+                // [BARU] Tombol Download di Pojok Kanan Atas
+                actions = {
+                    val currentState = uiState
+                    if (currentState is MedicalRecordUiState.Success) {
+                        IconButton(onClick = {
+                            val item = currentState.data
+                            // Panggil Fungsi Generator PDF menggunakan context yang sudah dideklarasikan di atas
+                            PdfGenerator.generateAndOpenMedicalReport(
+                                context = context,
+                                patientName = item.userName,
+                                data = item
+                            )
+                        }) {
+                            Icon(Icons.Default.Download, "Unduh PDF", tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)

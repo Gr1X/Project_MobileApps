@@ -18,6 +18,19 @@ data class DailyScheduleData(
     @set:PropertyName("open")
     var isOpen: Boolean = false,
     var startTime: String = "",
-    var endTime: String = ""
+    var endTime: String = "",
+
+    // --- TAMBAHAN BARU: PENGATURAN ISTIRAHAT ---
+    @get:PropertyName("isBreakEnabled")
+    @set:PropertyName("isBreakEnabled")
+    var isBreakEnabled: Boolean = false,
+
+    @get:PropertyName("breakStartTime")
+    @set:PropertyName("breakStartTime")
+    var breakStartTime: String = "12:00",
+
+    @get:PropertyName("breakEndTime")
+    @set:PropertyName("breakEndTime")
+    var breakEndTime: String = "13:00"
 )
 

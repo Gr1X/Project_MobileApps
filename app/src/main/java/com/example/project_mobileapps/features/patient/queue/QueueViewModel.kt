@@ -92,7 +92,11 @@ class QueueViewModel(
                 } else 0
                 val upcoming = queues.filter { it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL || it.status == QueueStatus.DILAYANI }
                 val activeQueueCount = upcoming.size
-                val estimatedWaitTime = queuesAhead * (status?.estimatedServiceTimeInMinutes ?: 0)
+                val estimatedWaitTime = if (status?.isPracticeOpen == true) {
+                    queuesAhead * (status.estimatedServiceTimeInMinutes ?: 15) // Gunakan default 15 jika null
+                } else {
+                    -1 // Menandakan status "PAUSED" atau "CLOSED"
+                }
 
                 // Update state dengan semua data yang sudah lengkap
                 _uiState.update {

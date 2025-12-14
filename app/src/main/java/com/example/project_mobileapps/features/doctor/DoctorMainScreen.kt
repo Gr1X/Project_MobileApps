@@ -18,6 +18,7 @@ import com.example.project_mobileapps.core.navigation.DoctorMenu
 import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.di.AppContainer
 import com.example.project_mobileapps.features.admin.manageSchedule.*
+import com.example.project_mobileapps.features.admin.medicine.ManageMedicineScreen
 import com.example.project_mobileapps.features.admin.reports.PatientHistoryDetailScreen
 import com.example.project_mobileapps.features.admin.reports.PatientHistoryDetailViewModel
 import com.example.project_mobileapps.features.admin.reports.PatientHistoryDetailViewModelFactory
@@ -31,16 +32,15 @@ fun DoctorMainScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    // Variabel NavController khusus Dokter
     val doctorNavController = rememberNavController()
-
     val navBackStackEntry by doctorNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Logic: Sembunyikan TopAppBar (Hamburger Menu) jika sedang di halaman detail/input
+    // Logic: Sembunyikan TopAppBar jika sedang di halaman detail/input
     val showMainAppBar = (currentRoute?.startsWith("patient_history_detail") == false) &&
             (currentRoute?.startsWith("medical_record_input") == false) &&
-            (currentRoute?.startsWith("medical_record_detail") == false)
+            (currentRoute?.startsWith("medical_record_detail") == false) &&
+            (currentRoute?.startsWith("manage_medicine") == false)
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -60,7 +60,6 @@ fun DoctorMainScreen(
     ) {
         Scaffold(
             topBar = {
-                // Hanya tampilkan AppBar di halaman utama
                 if (showMainAppBar) {
                     TopAppBar(
                         title = { },
@@ -109,47 +108,49 @@ fun DoctorMainScreen(
                         onNavigateToHistory = { patientId ->
                             doctorNavController.navigate("patient_history_detail/$patientId")
                         },
-                        // Navigasi ke Input EMR
-                        onNavigateToMedicalRecord = { qId, name, num ->
-                            doctorNavController.navigate("medical_record_input/$qId/$name/$num")
+                        // [UPDATE] Navigasi ke Input EMR (Kirim juga userId!)
+                        onNavigateToMedicalRecord = { qId, name, num, userId ->
+                            doctorNavController.navigate("medical_record_input/$qId/$name/$num/$userId")
                         }
                     )
                 }
 
                 // 3. MEDICAL RECORD INPUT (Form Input)
                 composable(
-                    route = "medical_record_input/{qId}/{name}/{num}",
+                    // [UPDATE] Tambahkan /{userId} di route
+                    route = "medical_record_input/{qId}/{name}/{num}/{userId}",
                     arguments = listOf(
                         navArgument("qId") { type = NavType.StringType },
                         navArgument("name") { type = NavType.StringType },
-                        navArgument("num") { type = NavType.StringType }
+                        navArgument("num") { type = NavType.StringType },
+                        navArgument("userId") { type = NavType.StringType } // [UPDATE] Argument baru
                     )
                 ) { backStackEntry ->
                     val qId = backStackEntry.arguments?.getString("qId") ?: ""
                     val name = backStackEntry.arguments?.getString("name") ?: ""
                     val num = backStackEntry.arguments?.getString("num") ?: ""
+                    val userId = backStackEntry.arguments?.getString("userId") ?: "" // [UPDATE] Ambil userId
 
-                    val vm: AdminQueueMonitorViewModel = viewModel(
-                        factory = AdminQueueMonitorViewModelFactory(
-                            AppContainer.queueRepository,
-                            AuthRepository
-                        )
+                    // [UPDATE PENTING] Gunakan MedicalRecordViewModelFactory
+                    // Jangan pakai AdminQueueMonitorViewModel lagi di sini!
+                    val medicalRecordViewModel: MedicalRecordViewModel = viewModel(
+                        factory = MedicalRecordViewModelFactory(AppContainer.queueRepository)
                     )
 
                     MedicalRecordInputScreen(
                         queueId = qId,
                         patientName = name,
                         queueNumber = num,
-                        viewModel = vm,
+                        patientId = userId, // [UPDATE] Pass userId ke screen
+                        viewModel = medicalRecordViewModel, // Inject VM yang benar
                         onNavigateBack = { doctorNavController.popBackStack() },
                         onRecordSaved = {
-                            // Sukses simpan -> Kembali ke Antrian
                             doctorNavController.popBackStack(DoctorMenu.Queue.route, false)
                         }
                     )
                 }
 
-                // 4. DETAIL HISTORY LIST (Daftar Kunjungan Pasien)
+                // 4. DETAIL HISTORY LIST
                 composable(
                     route = "patient_history_detail/{patientId}",
                     arguments = listOf(navArgument("patientId") { type = NavType.StringType })
@@ -166,7 +167,6 @@ fun DoctorMainScreen(
 
                     PatientHistoryDetailScreen(
                         viewModel = detailViewModel,
-                        // FIX: Gunakan doctorNavController
                         onNavigateBack = { doctorNavController.popBackStack() },
                         onNavigateToDetail = { visitId ->
                             doctorNavController.navigate("medical_record_detail/$visitId")
@@ -174,7 +174,7 @@ fun DoctorMainScreen(
                     )
                 }
 
-                // 5. DETAIL EMR FULL PAGE (Isi Lengkap Rekam Medis)
+                // 5. DETAIL EMR FULL PAGE
                 composable(
                     route = "medical_record_detail/{visitId}",
                     arguments = listOf(navArgument("visitId") { type = NavType.StringType })
@@ -193,6 +193,13 @@ fun DoctorMainScreen(
                         factory = ManagePracticeScheduleViewModelFactory(AppContainer.queueRepository)
                     )
                     ManagePracticeScheduleScreen(viewModel = practiceViewModel)
+                }
+
+                // 7. MANAJEMEN OBAT
+                composable("manage_medicine") {
+                    ManageMedicineScreen(
+                        onNavigateBack = { doctorNavController.popBackStack() }
+                    )
                 }
             }
         }

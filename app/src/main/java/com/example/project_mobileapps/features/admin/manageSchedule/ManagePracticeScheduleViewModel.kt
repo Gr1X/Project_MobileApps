@@ -163,6 +163,24 @@ class ManagePracticeScheduleViewModel(private val queueRepository: QueueReposito
             _isSaving.value = false
         }
     }
+
+    fun onBreakStatusChange(day: String, isEnabled: Boolean) {
+        _editedSchedules.update { current ->
+            current.map { if (it.dayOfWeek == day) it.copy(isBreakEnabled = isEnabled) else it }
+        }
+    }
+
+    fun onBreakTimeChange(day: String, hour: Int, minute: Int, isStartTime: Boolean) {
+        val formattedTime = String.format("%02d:%02d", hour, minute)
+        _editedSchedules.update { current ->
+            current.map {
+                if (it.dayOfWeek == day) {
+                    if (isStartTime) it.copy(breakStartTime = formattedTime)
+                    else it.copy(breakEndTime = formattedTime)
+                } else it
+            }
+        }
+    }
 }
 
 /**

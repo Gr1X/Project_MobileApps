@@ -2,6 +2,8 @@
 package com.example.project_mobileapps.features.doctor
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -52,6 +54,16 @@ fun DoctorDrawerContent(
         }
 
         Spacer(modifier = Modifier.weight(1f))
+
+        NavigationDrawerItem(
+            icon = { Icon(Icons.Default.Medication, null) },
+            label = { Text("Kelola Data Obat") },
+            selected = false,
+            onClick = { onNavigate("manage_medicine") },
+            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         NavigationDrawerItem(
             label = { Text("Logout", color = MaterialTheme.colorScheme.error) },

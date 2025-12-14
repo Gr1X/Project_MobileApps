@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
+import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -99,6 +100,14 @@ fun AdminDrawerContent(
         }
 
         Spacer(modifier = Modifier.weight(1f)) // Pendorong logout ke bawah
+
+        NavigationDrawerItem(
+            icon = { Icon(Icons.Default.Medication, null) },
+            label = { Text("Kelola Data Obat") },
+            selected = false,
+            onClick = { onNavigate("manage_medicine") },
+            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+        )
 
         // Tombol Logout
         NavigationDrawerItem(

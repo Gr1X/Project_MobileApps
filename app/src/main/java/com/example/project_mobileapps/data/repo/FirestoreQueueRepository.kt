@@ -111,6 +111,21 @@ object FirestoreQueueRepository : QueueRepository {
         awaitClose { listener.remove() }
     }.stateIn(repositoryScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    override suspend fun getPatientMedicalHistory(patientId: String): Result<List<QueueItem>> {
+        return try {
+            val snapshot = queuesCollection
+                .whereEqualTo("userId", patientId)
+                .whereEqualTo("status", "SELESAI") // Hanya ambil yang sudah selesai
+                .orderBy("finishedAt", Query.Direction.DESCENDING) // Urutkan dari yang terbaru
+                .get()
+                .await()
+
+            val historyList = snapshot.toObjects(QueueItem::class.java)
+            Result.success(historyList)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
     // =================================================================
     // 2. USER ACTIONS (WRITE)
@@ -120,16 +135,15 @@ object FirestoreQueueRepository : QueueRepository {
         return try {
             val (startOfDay, endOfDay) = getTodayRange()
 
-            // 1. Cek Jadwal Praktik (Validasi Waktu)
+            // 1. Cek Jadwal (Tetap)
             val scheduleSnapshot = scheduleDoc.get().await()
             val rawList = scheduleSnapshot.get("dailySchedules") as? List<*> ?: emptyList<Any>()
             val scheduleList = parseScheduleList(rawList)
-
             if (!isCurrentlyOpen(scheduleList)) {
-                return Result.failure(Exception("Pendaftaran gagal: Klinik sedang tutup (Di luar jam praktik)."))
+                return Result.failure(Exception("Pendaftaran gagal: Klinik sedang tutup."))
             }
 
-            // 2. Cek Duplikasi Harian
+            // 2. Cek Duplikasi Harian (Tetap)
             val existingQuery = queuesCollection
                 .whereEqualTo("userId", userId)
                 .whereEqualTo("doctorId", doctorId)
@@ -142,35 +156,29 @@ object FirestoreQueueRepository : QueueRepository {
                 return Result.failure(Exception("Anda sudah terdaftar dalam antrian hari ini."))
             }
 
-            // 3. LOGIKA Hitung Nomor Antrian Baru (Reset Harian)
-            val lastQueueSnapshot = queuesCollection
-                .whereEqualTo("doctorId", doctorId)
-                .whereGreaterThanOrEqualTo("createdAt", startOfDay)
-                .whereLessThanOrEqualTo("createdAt", endOfDay)
-                .orderBy("createdAt", Query.Direction.DESCENDING)
-                .limit(1)
-                .get().await()
+            // [PERBAIKAN TOTAL BAGIAN INI]
+            // HAPUS query 'lastQueueSnapshot' yang lama di sini.
+            // Kita akan hitung nomor di dalam transaction agar Atomic & Aman dari Race Condition.
 
-            val nextQueueNumber = if (lastQueueSnapshot.isEmpty) {
-                1
-            } else {
-                val lastItem = lastQueueSnapshot.documents[0].toObject(QueueItem::class.java)
-                (lastItem?.queueNumber ?: 0) + 1
-            }
-
-            // 4. Simpan Data
             val newQueueItem = firestore.runTransaction { transaction ->
+                // A. Baca Status Praktik (Lock Document)
                 val snapshot = transaction.get(practiceStatusDoc)
                 val status = snapshot.toObject(PracticeStatus::class.java)
                     ?: throw Exception("Data praktik tidak ditemukan.")
 
                 if (!status.isPracticeOpen) throw Exception("Pendaftaran sedang ditutup oleh Admin.")
+
+                // B. Hitung Nomor Baru dari Master Counter
+                val nextQueueNumber = status.lastQueueNumber + 1
+
+                // C. Validasi Kuota
                 if (nextQueueNumber > status.dailyPatientLimit) throw Exception("Kuota antrian hari ini sudah penuh.")
 
+                // D. Siapkan Data
                 val newQueueRef = queuesCollection.document()
                 val newItem = QueueItem(
                     id = newQueueRef.id,
-                    queueNumber = nextQueueNumber,
+                    queueNumber = nextQueueNumber, // Gunakan hasil hitungan atomic
                     userId = userId,
                     userName = userName,
                     doctorId = doctorId,
@@ -179,10 +187,11 @@ object FirestoreQueueRepository : QueueRepository {
                     createdAt = Date()
                 )
 
+                // E. Update Master Counter & Simpan Antrian
                 transaction.update(practiceStatusDoc, "lastQueueNumber", nextQueueNumber)
                 transaction.set(newQueueRef, newItem)
 
-                newItem
+                newItem // Return
             }.await()
 
             Result.success(newQueueItem)
@@ -440,7 +449,7 @@ object FirestoreQueueRepository : QueueRepository {
     }
 
     // =================================================================
-    // 5. HELPER / AUTOMATION (JANTUNG SISTEM OTOMATIS)
+    // 5. HELPER / AUTOMATION (PERBAIKAN LOGIC AUTO-CLOSE)
     // =================================================================
 
     private suspend fun runAutoScheduleCheck() {
@@ -448,55 +457,100 @@ object FirestoreQueueRepository : QueueRepository {
             val schedule = getDoctorSchedule(doctorId)
             if (schedule.isEmpty()) return
 
-            val calendar = Calendar.getInstance(TimeZone.getTimeZone("Asia/Jakarta"))
+            // Gunakan TimeZone Default HP agar sesuai dengan jam yang dilihat user
+            val calendar = Calendar.getInstance(TimeZone.getDefault())
+
             val dayMapping = listOf("Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu")
-            val currentDay = dayMapping[calendar.get(Calendar.DAY_OF_WEEK) - 1]
+            val dayIndex = calendar.get(Calendar.DAY_OF_WEEK) - 1
+            val currentDay = dayMapping[dayIndex]
+
+            // Konversi jam sekarang ke total menit (Contoh: 08:30 -> 510 menit)
             val nowMinutes = (calendar.get(Calendar.HOUR_OF_DAY) * 60) + calendar.get(Calendar.MINUTE)
 
             val todaySchedule = schedule.find { it.dayOfWeek.trim().equals(currentDay, ignoreCase = true) }
-            val updates = mutableMapOf<String, Any>()
 
+            val updates = mutableMapOf<String, Any>()
             val snapshot = practiceStatusDoc.get().await()
             val currentIsOpenInDb = snapshot.getBoolean("isPracticeOpen") ?: false
-            val currentStartDb = snapshot.getString("startTime") ?: ""
-            val currentEndDb = snapshot.getString("endTime") ?: ""
 
+            // --- LOGIKA UTAMA ---
             if (todaySchedule != null && todaySchedule.isOpen) {
-                val (sh, sm) = todaySchedule.startTime.split(":").map { it.toInt() }
-                val (eh, em) = todaySchedule.endTime.split(":").map { it.toInt() }
-                val startMins = sh * 60 + sm
-                val endMins = eh * 60 + em
+                // Bersihkan string jam dari spasi atau titik
+                val safeStart = todaySchedule.startTime.replace(".", ":").trim()
+                val safeEnd = todaySchedule.endTime.replace(".", ":").trim()
 
-                // [FIX] Cek apakah jam berubah, baru update map
-                if (currentStartDb != todaySchedule.startTime) updates["startTime"] = todaySchedule.startTime
-                if (currentEndDb != todaySchedule.endTime) updates["endTime"] = todaySchedule.endTime
+                try {
+                    // Parsing Jam Buka & Tutup
+                    val (sh, sm) = safeStart.split(":").map { it.toInt() }
+                    val (eh, em) = safeEnd.split(":").map { it.toInt() }
+                    val startMins = sh * 60 + sm
+                    val endMins = eh * 60 + em
 
-                if (nowMinutes in startMins..endMins) {
-                    // MASUK JAM PRAKTIK: Buka Otomatis jika masih tutup
-                    if (!currentIsOpenInDb) {
-                        updates["isPracticeOpen"] = true
+                    // Update Info Jam di DB agar UI Admin sinkron
+                    updates["startTime"] = safeStart
+                    updates["endTime"] = safeEnd
+
+                    // [LOGIKA BARU] Cek Apakah Sedang Jam Istirahat?
+                    var isCurrentlyBreak = false
+
+                    // Pastikan Model DailyScheduleData sudah punya field isBreakEnabled!
+                    if (todaySchedule.isBreakEnabled) {
+                        try {
+                            val safeBreakStart = todaySchedule.breakStartTime.replace(".", ":").trim()
+                            val safeBreakEnd = todaySchedule.breakEndTime.replace(".", ":").trim()
+                            val (bSh, bSm) = safeBreakStart.split(":").map { it.toInt() }
+                            val (bEh, bEm) = safeBreakEnd.split(":").map { it.toInt() }
+                            val breakStartMins = bSh * 60 + bSm
+                            val breakEndMins = bEh * 60 + bEm
+
+                            if (nowMinutes >= breakStartMins && nowMinutes < breakEndMins) {
+                                isCurrentlyBreak = true
+                            }
+                        } catch (e: Exception) {
+                            Log.e("AutoSchedule", "Format Jam Istirahat Salah", e)
+                        }
                     }
-                } else {
-                    // LEWAT JAM PRAKTIK: Tutup Otomatis jika masih buka
-                    if (currentIsOpenInDb) {
-                        updates["isPracticeOpen"] = false
-                        cancelRemainingQueues(doctorId)
+
+                    // --- KEPUTUSAN FINAL: BUKA ATAU TUTUP? ---
+                    // Buka JIKA: (Masuk Jam Operasional) DAN (TIDAK Sedang Istirahat)
+                    val shouldBeOpen = (nowMinutes in startMins..endMins) && !isCurrentlyBreak
+
+                    if (shouldBeOpen) {
+                        // KASUS: HARUSNYA BUKA
+                        if (!currentIsOpenInDb) {
+                            Log.d("AutoSchedule", "⏰ Auto-Open: Masuk Jam Kerja & Tidak Istirahat")
+                            updates["isPracticeOpen"] = true
+                        }
+                    } else {
+                        // KASUS: HARUSNYA TUTUP (Entah karena Istirahat atau Di Luar Jam)
+                        if (currentIsOpenInDb) {
+                            val reason = if(isCurrentlyBreak) "Sedang Istirahat" else "Di Luar Jam Operasional"
+                            Log.d("AutoSchedule", "🔒 Auto-Close: $reason")
+                            updates["isPracticeOpen"] = false
+
+                            // Opsional: cancelRemainingQueues(doctorId)
+                        }
                     }
+
+                } catch (e: Exception) {
+                    Log.e("AutoSchedule", "Format jam operasional salah: $safeStart - $safeEnd", e)
                 }
             } else {
-                // HARI LIBUR: Pastikan Tutup
+                // HARI LIBUR -> Jika DB masih Buka, Paksa Tutup
                 if (currentIsOpenInDb) {
+                    Log.d("AutoSchedule", "🔒 Auto-Close: Hari Libur")
                     updates["isPracticeOpen"] = false
-                    cancelRemainingQueues(doctorId)
                 }
             }
 
-            // [FIX] Hanya write ke Firestore jika ada perubahan nyata
+            // Simpan perubahan ke Firestore jika ada
             if (updates.isNotEmpty()) {
                 practiceStatusDoc.update(updates).await()
-                Log.d("Repo", "Auto Schedule Updated: $updates")
             }
-        } catch (e: Exception) { Log.e("Repo", "Auto Schedule Error", e) }
+
+        } catch (e: Exception) {
+            Log.e("AutoSchedule", "Error Fatal di Automation", e)
+        }
     }
 
     private suspend fun cancelRemainingQueues(doctorId: String) {
@@ -613,20 +667,51 @@ object FirestoreQueueRepository : QueueRepository {
         try {
             val (startOfToday, _) = getTodayRange()
 
+            // 1. Bersihkan antrian sisa kemarin (Tetap)
             val snapshot = queuesCollection
                 .whereEqualTo("doctorId", doctorId)
                 .whereLessThan("createdAt", startOfToday)
                 .whereIn("status", listOf("MENUNGGU", "DIPANGGIL"))
                 .get().await()
 
+            val batch = firestore.batch()
+            var hasUpdates = false
+
             if (!snapshot.isEmpty) {
-                val batch = firestore.batch()
                 snapshot.documents.forEach { doc ->
                     batch.update(doc.reference, mapOf(
                         "status" to QueueStatus.DIBATALKAN.name,
-                        "doctorNotes" to "Sistem: Dibatalkan otomatis"
+                        "doctorNotes" to "Sistem: Dibatalkan otomatis (Ganti Hari)"
                     ))
                 }
+                hasUpdates = true
+            }
+
+            // [PENAMBAHAN PENTING]
+            // Reset Counter "lastQueueNumber" dan "totalServed" jika sudah ganti hari
+            // Kita cek lastResetDate atau logika sederhana: jika cleaning up old queues, means it's a new day.
+            // Namun, agar aman, kita cek apakah 'lastQueueNumber' > 0 padahal antrian hari ini kosong?
+
+            // Cek jumlah antrian hari ini
+            val todayCountSnapshot = queuesCollection
+                .whereEqualTo("doctorId", doctorId)
+                .whereGreaterThanOrEqualTo("createdAt", startOfToday)
+                .limit(1) // Cukup cek ada 1 atau tidak
+                .get().await()
+
+            if (todayCountSnapshot.isEmpty) {
+                // Jika hari ini BELUM ada antrian sama sekali, PAKSA RESET COUNTER
+                val statusRef = firestore.collection("practice_status").document(doctorId)
+                batch.update(statusRef, mapOf(
+                    "lastQueueNumber" to 0,
+                    "currentServingNumber" to 0,
+                    "totalServed" to 0
+                ))
+                hasUpdates = true
+                Log.d("FirestoreRepo", "🔄 Reset Harian: Counter dikembalikan ke 0")
+            }
+
+            if (hasUpdates) {
                 batch.commit().await()
             }
         } catch (e: Exception) {

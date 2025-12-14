@@ -12,6 +12,7 @@ interface QueueRepository {
     val practiceStatusFlow: StateFlow<Map<String, PracticeStatus>>
     val dailyQueuesFlow: StateFlow<List<QueueItem>>
 
+    suspend fun getPatientMedicalHistory(patientId: String): Result<List<QueueItem>>
     suspend fun takeQueueNumber(doctorId: String, userId: String, userName: String, keluhan: String): Result<QueueItem>
     suspend fun cancelQueue(userId: String, doctorId: String): Result<Unit>
     suspend fun callNextPatient(doctorId: String): Result<Unit>

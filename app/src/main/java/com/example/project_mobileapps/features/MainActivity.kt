@@ -19,6 +19,7 @@ import com.example.project_mobileapps.ui.components.CustomToast
 import com.example.project_mobileapps.ui.components.ToastManager
 import com.example.project_mobileapps.ui.themes.ProjectMobileAppsTheme
 import com.example.project_mobileapps.utils.CloudinaryHelper
+import com.example.project_mobileapps.utils.MedicineSeeder
 import com.example.project_mobileapps.utils.NotificationHelper
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -40,6 +41,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         CloudinaryHelper.init(this)
         NotificationHelper.createNotificationChannels(this)
+        MedicineSeeder.seedData()
         setContent {
             ProjectMobileAppsTheme {
                 val navController = rememberNavController()

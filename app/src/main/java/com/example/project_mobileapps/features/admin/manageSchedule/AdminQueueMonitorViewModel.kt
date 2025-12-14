@@ -1,4 +1,3 @@
-// File: features/admin/manageSchedule/AdminQueueMonitorViewModel.kt
 package com.example.project_mobileapps.features.admin.manageSchedule
 
 import androidx.lifecycle.ViewModel
@@ -40,28 +39,58 @@ class AdminQueueMonitorViewModel(
     private val clinicId = AppContainer.CLINIC_ID
     private val _selectedFilter = MutableStateFlow<QueueStatus?>(null)
 
+    // [PERBAIKAN 1] Cache User di Memory agar tidak fetch berulang-ulang
+    private val _cachedUsers = MutableStateFlow<List<User>>(emptyList())
+
+    init {
+        // Ambil data user sekali saja saat layar dibuka
+        refreshUserData()
+    }
+
+    private fun refreshUserData() {
+        viewModelScope.launch {
+            try {
+                val users = authRepository.getAllUsers()
+                _cachedUsers.value = users
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // [PERBAIKAN 2] Masukkan _cachedUsers ke dalam combine
     val uiState: StateFlow<DoctorQueueUiState> = combine(
         queueRepository.dailyQueuesFlow,
         queueRepository.practiceStatusFlow,
-        _selectedFilter
-    ) { queues, statuses, selectedFilter ->
+        _selectedFilter,
+        _cachedUsers
+    ) { queues, statuses, selectedFilter, users ->
 
-        // 1. AMBIL STATUS KLINIK (Supaya data waktu tunggu ter-update)
         val myPracticeStatus = statuses[clinicId]
 
-        // 2. Mapping User
-        val allUsers = authRepository.getAllUsers()
+        // 1. Mapping User (Cepat dari Cache)
         val detailedList = queues.map { queueItem ->
             PatientQueueDetails(
                 queueItem = queueItem,
-                user = allUsers.find { it.uid == queueItem.userId }
+                user = users.find { it.uid == queueItem.userId }
             )
         }
 
-        // 3. Filter & Sort Position
+        // 2. Cari Posisi Penting
         val serving = detailedList.find { it.queueItem.status == QueueStatus.DILAYANI }
         val called = detailedList.find { it.queueItem.status == QueueStatus.DIPANGGIL }
-        val next = detailedList.filter { it.queueItem.status == QueueStatus.MENUNGGU }.minByOrNull { it.queueItem.queueNumber }
+
+        // [PERBAIKAN UTAMA DI SINI]
+        // Jangan gunakan minByOrNull { queueNumber }
+        // Gunakan logika yang sama dengan Repository: Sort by CreatedAt, lalu QueueNumber
+        val next = detailedList
+            .filter { it.queueItem.status == QueueStatus.MENUNGGU }
+            .sortedWith(
+                compareBy<PatientQueueDetails> { it.queueItem.createdAt } // Prioritas Waktu (Untuk menangani pasien telat)
+                    .thenBy { it.queueItem.queueNumber } // Tie-Breaker jika waktu sama persis
+            )
+            .firstOrNull() // Ambil yang paling atas
+
         val waitingCount = queues.count { it.status == QueueStatus.MENUNGGU }
 
         val filteredList = if (selectedFilter == null) detailedList else detailedList.filter { it.queueItem.status == selectedFilter }
@@ -70,12 +99,10 @@ class AdminQueueMonitorViewModel(
             isLoading = false,
             currentlyServing = serving,
             patientCalled = called,
-            nextInLine = next,
+            nextInLine = next, // Sekarang data 'next' sudah sinkron dengan yang akan dipanggil server
             totalWaitingCount = waitingCount,
             fullQueueList = filteredList,
             selectedFilter = selectedFilter,
-
-            // Masukkan data status yang sudah diambil di atas
             practiceStatus = myPracticeStatus
         )
     }.stateIn(
@@ -91,6 +118,8 @@ class AdminQueueMonitorViewModel(
             val result = queueRepository.callNextPatient(clinicId)
             if (result.isSuccess) {
                 ToastManager.showToast("✅ Pasien berhasil dipanggil.", ToastType.SUCCESS)
+                // Opsional: Refresh user data jaga-jaga ada user baru daftar
+                refreshUserData()
             } else {
                 val errorMsg = result.exceptionOrNull()?.message ?: "Gagal memanggil pasien."
                 ToastManager.showToast(errorMsg, ToastType.ERROR)
@@ -181,6 +210,12 @@ class AdminQueueMonitorViewModel(
             val result = queueRepository.cancelQueue(patientDetails.queueItem.userId, patientDetails.queueItem.doctorId)
             if (result.isSuccess) ToastManager.showToast("✅ Antrian dibatalkan", ToastType.SUCCESS)
             else ToastManager.showToast("Gagal membatalkan", ToastType.ERROR)
+        }
+    }
+
+    fun forceCheckLatePatients() {
+        viewModelScope.launch {
+            queueRepository.checkForLatePatients(clinicId)
         }
     }
 }

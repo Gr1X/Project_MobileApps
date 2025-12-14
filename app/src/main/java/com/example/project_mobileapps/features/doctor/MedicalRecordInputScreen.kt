@@ -1,4 +1,3 @@
-// File: features/doctor/MedicalRecordInputScreen.kt
 package com.example.project_mobileapps.features.doctor
 
 import androidx.compose.foundation.layout.*
@@ -7,8 +6,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MonitorWeight
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.outlined.*
@@ -24,11 +23,8 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.project_mobileapps.data.repo.AuthRepository
-import com.example.project_mobileapps.di.AppContainer
-import com.example.project_mobileapps.features.admin.manageSchedule.AdminQueueMonitorViewModel
-import com.example.project_mobileapps.features.admin.manageSchedule.AdminQueueMonitorViewModelFactory
-// [PERBAIKAN] Ganti ConfirmationDialog dengan ConfirmationBottomSheet
+import com.example.project_mobileapps.data.repo.FirestoreQueueRepository
+import com.example.project_mobileapps.features.doctor.components.PatientHistorySheet
 import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
 import com.example.project_mobileapps.ui.components.ToastManager
 import com.example.project_mobileapps.ui.components.ToastType
@@ -39,12 +35,17 @@ fun MedicalRecordInputScreen(
     queueId: String,
     patientName: String,
     queueNumber: String,
+    patientId: String, // [PENTING] Pastikan ID Pasien (userId) dikirim ke sini untuk load history
     onNavigateBack: () -> Unit,
     onRecordSaved: () -> Unit,
-    viewModel: AdminQueueMonitorViewModel = viewModel(
-        factory = AdminQueueMonitorViewModelFactory(AppContainer.queueRepository, AuthRepository)
+    // [PERBAIKAN] Gunakan MedicalRecordViewModel yang BARU
+    viewModel: MedicalRecordViewModel = viewModel(
+        factory = MedicalRecordViewModelFactory(FirestoreQueueRepository)
     )
 ) {
+    // Ambil UI State dari ViewModel Baru
+    val uiState by viewModel.uiState.collectAsState()
+
     // --- STATE FORM DATA ---
     var weight by remember { mutableStateOf("") }
     var height by remember { mutableStateOf("") }
@@ -58,12 +59,23 @@ fun MedicalRecordInputScreen(
     var notes by remember { mutableStateOf("") }
 
     // --- STATE UI ---
-    var isSubmitting by remember { mutableStateOf(false) }
-    var showConfirmSheet by remember { mutableStateOf(false) } // Ubah nama variabel
+    var showConfirmSheet by remember { mutableStateOf(false) }
+    var showHistorySheet by remember { mutableStateOf(false) } // State untuk History
+
+    // Dropdown Obat
+    var expandedObat by remember { mutableStateOf(false) }
+    var searchObat by remember { mutableStateOf("") }
 
     // Validasi Error State
     var isDiagnosisError by remember { mutableStateOf(false) }
     var isTreatmentError by remember { mutableStateOf(false) }
+
+    // Efek Error dari ViewModel
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let {
+            ToastManager.showToast(it, ToastType.ERROR)
+        }
+    }
 
     fun validateAndSubmit() {
         isDiagnosisError = diagnosis.isBlank()
@@ -73,35 +85,46 @@ fun MedicalRecordInputScreen(
             ToastManager.showToast("Mohon lengkapi Diagnosa dan Tindakan", ToastType.ERROR)
             return
         }
-        showConfirmSheet = true // Trigger BottomSheet
+        showConfirmSheet = true
     }
 
-    // [PERBAIKAN] Gunakan ConfirmationBottomSheet
+    // KONFIRMASI SIMPAN
     if (showConfirmSheet) {
         ConfirmationBottomSheet(
             onDismiss = { showConfirmSheet = false },
             onConfirm = {
                 showConfirmSheet = false
-                isSubmitting = true
-                viewModel.submitMedicalRecord(
-                    queueId = queueId,
-                    weight = weight.toDoubleOrNull() ?: 0.0,
-                    height = height.toDoubleOrNull() ?: 0.0,
-                    bp = bloodPressure,
-                    temp = temperature.toDoubleOrNull() ?: 0.0,
-                    physical = physicalExam,
-                    diagnosis = diagnosis,
-                    treatment = treatment,
-                    prescription = prescription,
-                    notes = notes,
-                    onSuccess = {
-                        isSubmitting = false
-                        onRecordSaved()
-                    }
+
+                // Siapkan Data Map
+                val dataMap = mapOf(
+                    "weightKg" to (weight.toDoubleOrNull() ?: 0.0),
+                    "heightCm" to (height.toDoubleOrNull() ?: 0.0),
+                    "bloodPressure" to bloodPressure,
+                    "temperature" to (temperature.toDoubleOrNull() ?: 0.0),
+                    "physicalExam" to physicalExam,
+                    "diagnosis" to diagnosis,
+                    "treatment" to treatment,
+                    "prescription" to prescription,
+                    "doctorNotes" to notes
                 )
+
+                // Panggil ViewModel Submit
+                viewModel.submitMedicalRecord(queueId, dataMap) {
+                    ToastManager.showToast("✅ Rekam Medis Tersimpan", ToastType.SUCCESS)
+                    onRecordSaved()
+                }
             },
             title = "Simpan Rekam Medis?",
-            text = "Pastikan data medis untuk pasien $patientName sudah benar. Data tidak dapat diubah setelah disimpan."
+            text = "Pastikan data medis untuk pasien $patientName sudah benar."
+        )
+    }
+
+    // SHEET HISTORY PASIEN
+    if (showHistorySheet) {
+        PatientHistorySheet(
+            history = uiState.patientHistory,
+            isLoading = uiState.isHistoryLoading,
+            onDismiss = { showHistorySheet = false }
         )
     }
 
@@ -116,7 +139,16 @@ fun MedicalRecordInputScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "Kembali")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali")
+                    }
+                },
+                actions = {
+                    // TOMBOL LIHAT RIWAYAT (BARU)
+                    IconButton(onClick = {
+                        viewModel.loadPatientHistory(patientId) // Load data history
+                        showHistorySheet = true
+                    }) {
+                        Icon(Icons.Default.History, "Riwayat Pasien")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
@@ -131,9 +163,9 @@ fun MedicalRecordInputScreen(
                         .padding(16.dp)
                         .height(56.dp),
                     shape = RoundedCornerShape(12.dp),
-                    enabled = !isSubmitting
+                    enabled = !uiState.isSubmitting
                 ) {
-                    if (isSubmitting) {
+                    if (uiState.isSubmitting) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                     } else {
                         Icon(Icons.Default.Save, null)
@@ -145,7 +177,6 @@ fun MedicalRecordInputScreen(
         },
         containerColor = Color(0xFFF8F9FA)
     ) { padding ->
-        // ... (SISA KODE UI CARD INPUT TETAP SAMA SEPERTI SEBELUMNYA) ...
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -154,8 +185,6 @@ fun MedicalRecordInputScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // ... (Copy Paste bagian InputSectionCard dari jawaban sebelumnya di sini) ...
-
             // --- SECTION 1: OBJECTIVE (VITAL SIGNS) ---
             InputSectionCard(title = "Tanda Vital (Objective)", icon = Icons.Default.MonitorWeight, color = Color(0xFF2196F3)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -187,8 +216,71 @@ fun MedicalRecordInputScreen(
                     label = "Tindakan Medis (Wajib)", placeholder = "Misal: Nebulizer, Jahit luka...",
                     isError = isTreatmentError, errorMessage = "Tindakan harus diisi", singleLine = false
                 )
+
                 Spacer(Modifier.height(12.dp))
-                MedicalInput(value = prescription, onValueChange = { prescription = it }, label = "Resep Obat", placeholder = "R/ Paracetamol...", singleLine = false, minLines = 3)
+
+                // --- DROPDOWN OBAT (MENGGUNAKAN DATA DARI VIEWMODEL) ---
+                ExposedDropdownMenuBox(
+                    expanded = expandedObat,
+                    onExpandedChange = { expandedObat = !expandedObat }
+                ) {
+                    OutlinedTextField(
+                        value = searchObat,
+                        onValueChange = { searchObat = it; expandedObat = true },
+                        label = { Text("Cari & Tambah Obat") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedObat) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White
+                        )
+                    )
+
+                    // Filter Obat dari UI State ViewModel
+                    val filteredOptions = uiState.medicines.filter {
+                        it.name.contains(searchObat, ignoreCase = true)
+                    }
+
+                    if (filteredOptions.isNotEmpty()) {
+                        ExposedDropdownMenu(
+                            expanded = expandedObat,
+                            onDismissRequest = { expandedObat = false }
+                        ) {
+                            filteredOptions.forEach { obat ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(obat.name, fontWeight = FontWeight.Bold)
+                                            Text("${obat.category} • ${obat.form}", style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    },
+                                    onClick = {
+                                        // Auto-Fill Text
+                                        val textToAdd = "- ${obat.name} (..x..)"
+                                        prescription = if (prescription.isBlank()) textToAdd else "$prescription\n$textToAdd"
+
+                                        searchObat = ""
+                                        expandedObat = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // TextField Resep Utama
+                OutlinedTextField(
+                    value = prescription,
+                    onValueChange = { prescription = it },
+                    label = { Text("Daftar Resep Obat (Final)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    placeholder = { Text("Pilih obat di atas atau ketik manual...") },
+                    colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = Color.White, unfocusedContainerColor = Color.White)
+                )
+
                 Spacer(Modifier.height(12.dp))
                 MedicalInput(value = notes, onValueChange = { notes = it }, label = "Saran / Catatan Dokter", placeholder = "Istirahat cukup...", singleLine = false, minLines = 2)
             }
@@ -198,7 +290,7 @@ fun MedicalRecordInputScreen(
     }
 }
 
-// ... (Helper Composable InputSectionCard dan MedicalInput tetap sama) ...
+// ... (InputSectionCard dan MedicalInput Helper tetap sama seperti sebelumnya) ...
 @Composable
 fun InputSectionCard(title: String, icon: ImageVector, color: Color, content: @Composable ColumnScope.() -> Unit) {
     Card(
@@ -214,7 +306,7 @@ fun InputSectionCard(title: String, icon: ImageVector, color: Color, content: @C
                 Spacer(Modifier.width(12.dp))
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
             }
-            Divider(modifier = Modifier.padding(vertical = 16.dp), color = Color(0xFFEEF2F6))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = Color(0xFFEEF2F6))
             content()
         }
     }
