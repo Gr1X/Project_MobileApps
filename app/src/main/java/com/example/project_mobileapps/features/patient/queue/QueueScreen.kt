@@ -106,7 +106,6 @@ fun QueueScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Status Antrian") },
-                navigationIcon = { CircularBackButton(onClick = onBackToHome) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },

@@ -3,6 +3,12 @@ package com.example.project_mobileapps.features.admin.manageSchedule
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +49,7 @@ import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
 import com.example.project_mobileapps.ui.components.QrScannerScreen
 import com.example.project_mobileapps.ui.components.ToastManager
 import com.example.project_mobileapps.ui.components.ToastType
+import com.example.project_mobileapps.ui.themes.*
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -63,16 +71,27 @@ fun AdminQueueMonitorScreen(
     viewModel: AdminQueueMonitorViewModel,
     currentUserRole: Role?,
     onNavigateToHistory: (String) -> Unit,
-    onNavigateToMedicalRecord: (String, String, String, String) -> Unit
+    onNavigateToMedicalRecord: (String, String, String, String) -> Unit,
+    onNavigateToManualInput: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    // State Lokal
+    // --- STATE LOKAL ---
     var showScanner by remember { mutableStateOf(false) }
     var isProcessingQr by remember { mutableStateOf(false) }
     var activeConfirmation by remember { mutableStateOf<ConfirmationAction?>(null) }
     var patientToView by remember { mutableStateOf<PatientQueueDetails?>(null) }
+
+    // [BARU] State untuk Dialog Manual Input & FAB Animation
+    var showManualDialog by remember { mutableStateOf(false) }
+    var isFabExpanded by remember { mutableStateOf(false) }
+
+    // Animasi Rotasi Icon (+) jadi (x)
+    val fabRotation by animateFloatAsState(
+        targetValue = if (isFabExpanded) 45f else 0f,
+        label = "FabRotation"
+    )
 
     // Helper Date (Safe)
     val todayDate = remember {
@@ -152,6 +171,18 @@ fun AdminQueueMonitorScreen(
         }
     }
 
+    // [BARU] DIALOG MANUAL INPUT
+    if (showManualDialog) {
+        AlertDialog(
+            onDismissRequest = { showManualDialog = false },
+            title = { Text("Tambah Antrian Manual") },
+            text = { Text("Formulir pendaftaran pasien walk-in akan muncul di sini.") },
+            confirmButton = {
+                Button(onClick = { showManualDialog = false }) { Text("Tutup") }
+            }
+        )
+    }
+
     // --- BOTTOM SHEET KONFIRMASI ---
     activeConfirmation?.let { action ->
         val (title, msg, onConfirm) = when (action) {
@@ -160,7 +191,6 @@ fun AdminQueueMonitorScreen(
             is ConfirmationAction.Arrive -> Triple("Konfirmasi Kehadiran?", "Pasien sudah ada di ruang tunggu?", { viewModel.confirmPatientArrival(action.patient.queueItem.queueNumber) })
             is ConfirmationAction.Finish -> Triple("Selesaikan Sesi?", "Lanjut ke pengisian Rekam Medis.", {
                 val item = action.patient.queueItem
-                // [PERBAIKAN] Kirim item.userId sebagai parameter ke-4
                 onNavigateToMedicalRecord(item.id, item.userName, item.queueNumber.toString(), item.userId)
             })
         }
@@ -187,22 +217,69 @@ fun AdminQueueMonitorScreen(
     // --- LAYOUT UTAMA ---
     Scaffold(
         containerColor = Color(0xFFF8F9FA),
+
+        // [MODIFIKASI] EXPANDABLE FAB (SPEED DIAL)
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { isProcessingQr = false; showScanner = true },
-                icon = { Icon(Icons.Outlined.QrCodeScanner, null) },
-                text = { Text("Scan QR") },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White,
-                shape = RoundedCornerShape(16.dp)
-            )
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                // ITEM 1: SCAN QR (Muncul saat Expanded)
+                AnimatedVisibility(
+                    visible = isFabExpanded,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    FabOptionItem(
+                        icon = Icons.Outlined.QrCodeScanner,
+                        label = "Scan QR",
+                        onClick = {
+                            isFabExpanded = false
+                            isProcessingQr = false
+                            showScanner = true
+                        }
+                    )
+                }
+
+                // Item 2: Manual Input
+                AnimatedVisibility(visible = isFabExpanded, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                    FabOptionItem(
+                        icon = Icons.Default.Edit,
+                        label = "Manual Input",
+                        onClick = {
+                            isFabExpanded = false
+                            // Panggil navigasi ke Manual Input Screen
+                            onNavigateToManualInput()
+                        }
+                    )
+                }
+
+                // TOMBOL UTAMA (TOGGLE)
+                FloatingActionButton(
+                    onClick = { isFabExpanded = !isFabExpanded },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = FloatingActionButtonDefaults.elevation(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Menu",
+                        modifier = Modifier
+                            .size(24.dp)
+                            .graphicsLayer(rotationZ = fabRotation) // Animasi Putar
+                    )
+                }
+            }
         }
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues),
-            contentPadding = PaddingValues(bottom = 100.dp),
+            // Tambah padding bawah agar list tidak ketutup FAB
+            contentPadding = PaddingValues(bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             // 1. HEADER
@@ -210,7 +287,7 @@ fun AdminQueueMonitorScreen(
                 Column(modifier = Modifier.padding(horizontal = 20.dp).padding(top = 16.dp)) {
                     Text(todayDate, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                     Spacer(Modifier.height(4.dp))
-                    Text("Monitoring Antrian", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+                    Text("Monitoring Antrian",  style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 22.sp), color = TextPrimary)
                     Spacer(Modifier.height(16.dp))
                     TopStatsGrid(uiState)
                 }
@@ -264,7 +341,6 @@ fun AdminQueueMonitorScreen(
             } else if (uiState.fullQueueList.isEmpty()) {
                 item { EmptyStateView() }
             } else {
-                // Hapus parameter KEY untuk menghindari crash ID ganda
                 items(uiState.fullQueueList) { patient ->
                     PatientQueueRowEnhanced(
                         patientDetails = patient,
@@ -282,23 +358,121 @@ fun AdminQueueMonitorScreen(
 // COMPOSABLES VISUAL (SAFE & PROFESSIONAL)
 // =================================================================
 
+// [BARU] Helper untuk Item FAB Expandable
 @Composable
-fun TopStatsGrid(uiState: DoctorQueueUiState) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        StatCard("Dilayani", uiState.currentlyServing?.queueItem?.queueNumber?.toString() ?: "-", Icons.Outlined.MedicalServices, Color(0xFFE8F5E9), Color(0xFF2E7D32), Modifier.weight(1f))
-        StatCard("Menunggu", uiState.totalWaitingCount.toString(), Icons.Outlined.PeopleAlt, Color(0xFFE3F2FD), Color(0xFF1565C0), Modifier.weight(1f))
-        StatCard("Next", uiState.nextInLine?.queueItem?.queueNumber?.toString() ?: "-", Icons.Outlined.ConfirmationNumber, Color(0xFFFFF3E0), Color(0xFFEF6C00), Modifier.weight(1f))
+fun FabOptionItem(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(end = 4.dp)
+    ) {
+        // Label (Teks di kiri tombol)
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color.White,
+            shadowElevation = 2.dp,
+            modifier = Modifier.padding(end = 12.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            )
+        }
+
+        // Tombol Mini
+        SmallFloatingActionButton(
+            onClick = onClick,
+            containerColor = Color.White,
+            contentColor = MaterialTheme.colorScheme.primary,
+            elevation = FloatingActionButtonDefaults.elevation(4.dp)
+        ) {
+            Icon(imageVector = icon, contentDescription = label)
+        }
     }
 }
 
 @Composable
-fun StatCard(label: String, value: String, icon: ImageVector, color: Color, textColor: Color, modifier: Modifier) {
-    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = color), shape = RoundedCornerShape(16.dp)) {
-        Column(modifier = Modifier.padding(12.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, null, tint = textColor, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = textColor)
-            Text(label, style = MaterialTheme.typography.labelSmall, color = textColor.copy(alpha = 0.8f))
+fun TopStatsGrid(uiState: DoctorQueueUiState) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Card 1: Sedang Dilayani
+        StatCard(
+            label = "Dilayani",
+            value = uiState.currentlyServing?.queueItem?.queueNumber?.toString() ?: "-",
+            icon = Icons.Outlined.MedicalServices,
+            themeColor = StateSuccess,
+            modifier = Modifier.weight(1f)
+        )
+
+        // Card 2: Menunggu
+        StatCard(
+            label = "Menunggu",
+            value = uiState.totalWaitingCount.toString(),
+            icon = Icons.Outlined.PeopleAlt,
+            themeColor = BrandPrimary,
+            modifier = Modifier.weight(1f)
+        )
+
+        // Card 3: Berikutnya
+        StatCard(
+            label = "Next",
+            value = uiState.nextInLine?.queueItem?.queueNumber?.toString() ?: "-",
+            icon = Icons.Outlined.ConfirmationNumber,
+            themeColor = StateWarning,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+fun StatCard(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    themeColor: Color,
+    modifier: Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(1.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(themeColor.copy(alpha = 0.1f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = themeColor,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -310,7 +484,6 @@ fun FilterChipsRow(
     selectedOption: QueueStatus?,
     onOptionSelected: (QueueStatus?) -> Unit
 ) {
-    // Gunakan Row + HorizontalScroll agar lebih aman dibanding LazyRow di dalam LazyColumn
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -368,6 +541,8 @@ fun MainActionSection(
         }
         uiState.patientCalled != null -> {
             val patient = uiState.patientCalled
+            val callLimit = uiState.practiceStatus?.patientCallTimeLimitMinutes ?: 2
+
             ActivePatientCard(
                 statusColor = Color(0xFFEF6C00),
                 statusText = "MENUNGGU KEHADIRAN",
@@ -376,10 +551,21 @@ fun MainActionSection(
                 onWhatsApp = { patient.user?.phoneNumber?.let { onWhatsAppClick(it) } },
                 onCall = { patient.user?.phoneNumber?.let { onCallClick(it) } },
                 content = {
-                    TimerDisplay(startTime = patient.queueItem.calledAt?.time ?: 0, isCountdown = true, limitMinutes = 15)
+                    TimerDisplay(
+                        startTime = patient.queueItem.calledAt?.time ?: 0,
+                        isCountdown = true,
+                        limitMinutes = callLimit
+                    )
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = { onAction(ConfirmationAction.Arrive(patient)) }, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF6C00))) {
-                        Icon(Icons.Default.PersonPinCircle, null); Spacer(Modifier.width(8.dp)); Text("Konfirmasi Hadir")
+                    Button(
+                        onClick = { onAction(ConfirmationAction.Arrive(patient)) },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF6C00))
+                    ) {
+                        Icon(Icons.Default.PersonPinCircle, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Konfirmasi Hadir")
                     }
                 }
             )
@@ -455,7 +641,7 @@ fun ActivePatientCard(
 @Composable
 fun TimerDisplay(startTime: Long, isCountdown: Boolean, limitMinutes: Int = 0) {
     var timeText by remember { mutableStateOf("--:--") }
-    LaunchedEffect(startTime) {
+    LaunchedEffect(startTime, limitMinutes) {
         val deadline = startTime + (limitMinutes * 60 * 1000)
         while (true) {
             val now = Date().time
@@ -482,30 +668,118 @@ fun PatientQueueRowEnhanced(
     onCancelClick: () -> Unit,
     onHistoryClick: () -> Unit
 ) {
+    val item = patientDetails.queueItem
     var showMenu by remember { mutableStateOf(false) }
+
+    val statusColor = when (item.status) {
+        QueueStatus.DILAYANI -> BrandPrimary
+        QueueStatus.DIPANGGIL -> StatusWarning
+        else -> TextSecondary
+    }
+
+    val bgCard = if (item.status == QueueStatus.DILAYANI) BrandPrimary.copy(0.05f) else SurfaceWhite
+    val border = if (item.status == QueueStatus.DILAYANI) BorderStroke(1.dp, BrandPrimary.copy(0.3f)) else null
+
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(1.dp), border = BorderStroke(1.dp, Color(0xFFEEEEEE))
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = bgCard),
+        border = border,
+        elevation = CardDefaults.cardElevation(if (border == null) 1.dp else 0.dp),
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(modifier = Modifier.size(48.dp), shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.primary.copy(0.1f)) {
-                Box(contentAlignment = Alignment.Center) { Text("${patientDetails.queueItem.queueNumber}", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.primary) }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(AdminBackground, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = item.queueNumber.toString(),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = TextPrimary
+                )
             }
+
             Spacer(Modifier.width(16.dp))
+
             Column(modifier = Modifier.weight(1f)) {
-                Text(patientDetails.user?.name ?: patientDetails.queueItem.userName, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    text = patientDetails.user?.name ?: item.userName,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 val age = calculateAge(patientDetails.user?.dateOfBirth)
-                Text("Usia: $age Thn • ${patientDetails.queueItem.keluhan}", style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = "Usia: $age Thn • ${item.keluhan}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-            StatusChip(patientDetails.queueItem.status)
+
             Spacer(Modifier.width(8.dp))
+
+            Surface(
+                color = statusColor.copy(0.1f),
+                shape = RoundedCornerShape(4.dp)
+            ) {
+                Text(
+                    text = item.status.name,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp
+                    ),
+                    color = statusColor,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+
+            Spacer(Modifier.width(4.dp))
             Box {
-                IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.MoreVert, "Menu", tint = Color.Gray) }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(text = { Text("Lihat Riwayat") }, onClick = { showMenu = false; onHistoryClick() }, leadingIcon = { Icon(Icons.Outlined.History, null) })
-                    if (patientDetails.queueItem.status == QueueStatus.MENUNGGU) {
-                        DropdownMenuItem(text = { Text("Batalkan", color = Color.Red) }, onClick = { showMenu = false; onCancelClick() }, leadingIcon = { Icon(Icons.Outlined.Cancel, null, tint = Color.Red) })
+                IconButton(
+                    onClick = { showMenu = true },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Menu",
+                        tint = TextSecondary
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Lihat Riwayat") },
+                        onClick = {
+                            showMenu = false
+                            onHistoryClick()
+                        },
+                        leadingIcon = { Icon(Icons.Outlined.History, null) }
+                    )
+                    if (item.status == QueueStatus.MENUNGGU) {
+                        DropdownMenuItem(
+                            text = { Text("Batalkan", color = Color.Red) },
+                            onClick = {
+                                showMenu = false
+                                onCancelClick()
+                            },
+                            leadingIcon = { Icon(Icons.Outlined.Cancel, null, tint = Color.Red) }
+                        )
                     }
                 }
             }
@@ -521,18 +795,6 @@ fun EmptyStateView() {
     }
 }
 
-@Composable
-fun StatusChip(status: QueueStatus) {
-    val (text, color, textColor) = when (status) {
-        QueueStatus.MENUNGGU -> Triple("Menunggu", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
-        QueueStatus.DIPANGGIL -> Triple("Dipanggil", Color(0xFFFFF9C4), Color.Black)
-        QueueStatus.DILAYANI -> Triple("Dilayani", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
-        QueueStatus.SELESAI -> Triple("Selesai", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
-        QueueStatus.DIBATALKAN -> Triple("Batal", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
-    }
-    Text(text, modifier = Modifier.clip(CircleShape).background(color).padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = textColor)
-}
-
 fun calculateAge(dob: String?): String {
     if (dob.isNullOrEmpty()) return "-"
     return try {
@@ -542,7 +804,6 @@ fun calculateAge(dob: String?): String {
     } catch (e: Exception) { "-" }
 }
 
-// Pastikan Anda menyalin fungsi DetailRow & PatientDetailBottomSheet dari kode sebelumnya jika belum ada
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PatientDetailBottomSheet(
@@ -566,10 +827,8 @@ fun PatientDetailBottomSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Quick Actions di Detail Sheet
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onWhatsAppClick, modifier = Modifier.weight(1f)) {
-                    // Gunakan icon default jika tidak ada resource khusus
                     Icon(Icons.Default.Call, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("WhatsApp")

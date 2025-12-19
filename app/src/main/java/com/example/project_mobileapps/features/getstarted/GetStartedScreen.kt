@@ -60,7 +60,7 @@ fun GetStartedScreen(
         ) {
             // Judul Utama
             Text(
-                text = "KlinIQ",
+                text = "KliniQ",
                 style = MaterialTheme.typography.headlineMedium,
                 color = Color.White,
                 textAlign = TextAlign.Start

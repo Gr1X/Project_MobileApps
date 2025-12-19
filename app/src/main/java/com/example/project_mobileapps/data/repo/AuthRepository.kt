@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.concurrent.TimeUnit
+import com.example.project_mobileapps.data.repo.FirestoreQueueRepository
+import com.google.firebase.firestore.toObject
 
 /**
  * Singleton object yang bertindak sebagai Repository untuk autentikasi (Login, Logout, Register).
@@ -73,6 +75,13 @@ object AuthRepository {
                 .setDisplayName(name)
                 .build()
             firebaseUser.updateProfile(profileUpdates).await()
+
+            if (phone.isNotEmpty()) {
+                // Kita jalankan di scope repository agar tidak menghalangi return
+                repoScope.launch {
+                    FirestoreQueueRepository.syncTemporaryRecordsToNewAccount(firebaseUser.uid, phone)
+                }
+            }
 
             // 3. Kirim Email Verifikasi
             firebaseUser.sendEmailVerification().await()
@@ -240,6 +249,21 @@ object AuthRepository {
         }
     }
 
+    suspend fun getUserById(userId: String): User? {
+        return try {
+            val snapshot = firestore.collection("users")
+                .document(userId)
+                .get()
+                .await()
+
+            // Konversi dokumen Firestore menjadi objek User
+            snapshot.toObject<User>()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
     // --- FUNGSI BARU: GOOGLE LOGIN ---
     suspend fun signInWithGoogle(idToken: String): Result<User> {
         return try {
@@ -255,8 +279,18 @@ object AuthRepository {
                 val existingUser = snapshot.toObject(User::class.java)!!
                 _currentUser.value = existingUser
                 Result.success(existingUser)
+
+                val phone = existingUser.phoneNumber
+                if (phone.isNotEmpty() && phone != "N/A") {
+                    FirestoreQueueRepository.syncTemporaryRecordsToNewAccount(existingUser.uid, phone)
+                }
+
+                Result.success(existingUser)
+
             } else {
                 // User Baru
+                val phone = firebaseUser.phoneNumber ?: ""
+
                 val newUser = User(
                     uid = firebaseUser.uid,
                     name = firebaseUser.displayName ?: "User Baru",
@@ -267,6 +301,12 @@ object AuthRepository {
                 )
                 docRef.set(newUser).await()
                 _currentUser.value = newUser
+                Result.success(newUser)
+
+                if (phone.isNotEmpty()) {
+                    FirestoreQueueRepository.syncTemporaryRecordsToNewAccount(newUser.uid, phone)
+                }
+
                 Result.success(newUser)
             }
         } catch (e: Exception) {
@@ -319,6 +359,12 @@ object AuthRepository {
 
             // 3. Simpan Data ke Firestore
             usersCollection.document(firebaseUser.uid).set(newUser).await()
+
+            // [AUTO-SYNC] JEMBATAN KONEKSI DATA
+            // Panggil fungsi di QueueRepository untuk memindahkan data 'temp_08xx' ke 'UID' baru
+            if (phone.isNotEmpty()) {
+                FirestoreQueueRepository.syncTemporaryRecordsToNewAccount(newUser.uid, phone)
+            }
 
             // 4. KIRIM LINK VERIFIKASI
             firebaseUser.sendEmailVerification().await()

@@ -9,50 +9,49 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-// 1. Definisikan LightColorScheme dengan palet warna baru kita
-/**
- * Skema warna terang (light theme) kustom untuk aplikasi.
- * Dibuat menggunakan [lightColorScheme] dan warna-warna yang didefinisikan di `Color.kt`.
- * Nama properti (misal: `primary`, `onSurfaceVariant`) mengikuti konvensi Material Design 3.
- */
+// MAPPING WARNA KE MATERIAL 3
 private val LightColorScheme = lightColorScheme(
-    primary = PrimaryPeriwinkle,
-    onPrimary = OnPrimary,
-    background = AppBackground,
-    onBackground = TextPrimary,
-    surface = Surface,
-    onSurface = TextPrimary,
+    // Brand Colors
+    primary = BrandPrimary,
+    onPrimary = SurfaceWhite,             // Teks di atas tombol biru adalah putih
+    primaryContainer = BrandLight,
+    onPrimaryContainer = BrandSecondary,
+
+    // Backgrounds
+    background = BackgroundApp,
+    onBackground = TextPrimary,           // Teks di background aplikasi adalah abu gelap
+    surface = SurfaceWhite,
+    onSurface = TextPrimary,              // Teks di dalam kartu adalah abu gelap
+    surfaceVariant = SurfaceSubtle,
     onSurfaceVariant = TextSecondary,
-    secondaryContainer = LightPurpleGray,
-    onSecondaryContainer = PrimaryPeriwinkle
+
+    // Error States
+    error = StateError,
+    onError = SurfaceWhite,
+    errorContainer = StateErrorBg,
+    onErrorContainer = StateError // Teks error di dalam container error warnanya merah
 )
-/**
- * Fungsi Composable utama untuk menerapkan tema aplikasi.
- * Membungkus seluruh konten aplikasi dengan [MaterialTheme].
- * Tema ini dikunci ke mode terang (light mode).
- *
- * @param content Lambda Composable yang berisi UI aplikasi yang akan diberi tema.
- */
+
 @Composable
 fun ProjectMobileAppsTheme(
-    // 2. Kunci tema ke Light Mode dengan menghapus parameter darkTheme
     content: @Composable () -> Unit
 ) {
-    // 3. Langsung gunakan LightColorScheme tanpa logika pengecekan tema gelap
     val colorScheme = LightColorScheme
     val view = LocalView.current
 
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
+            // Status bar mengikuti warna background aplikasi (Clean look)
+            window.statusBarColor = BackgroundApp.toArgb()
+            // Ikon status bar menjadi gelap
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = true
         }
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = AppTypography, // Pastikan Type.kt Anda sudah menggunakan font Poppins
         content = content
     )
 }

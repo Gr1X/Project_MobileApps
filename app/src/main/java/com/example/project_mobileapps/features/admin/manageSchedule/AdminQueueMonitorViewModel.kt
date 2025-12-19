@@ -39,7 +39,6 @@ class AdminQueueMonitorViewModel(
     private val clinicId = AppContainer.CLINIC_ID
     private val _selectedFilter = MutableStateFlow<QueueStatus?>(null)
 
-    // [PERBAIKAN 1] Cache User di Memory agar tidak fetch berulang-ulang
     private val _cachedUsers = MutableStateFlow<List<User>>(emptyList())
 
     init {

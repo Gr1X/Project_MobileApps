@@ -4,134 +4,156 @@ package com.example.project_mobileapps.features.doctor
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.project_mobileapps.data.model.DailyScheduleData
 import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.model.QueueStatus
+import com.example.project_mobileapps.data.model.QueueItem
 import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.data.repo.QueueRepository
 import com.example.project_mobileapps.di.AppContainer
 import com.example.project_mobileapps.features.admin.manageSchedule.PatientQueueDetails
+import com.example.project_mobileapps.ui.components.ToastManager
+import com.example.project_mobileapps.ui.components.ToastType
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import java.util.Calendar
-/**
- * Model data (UI State) untuk [DoctorDashboardScreen].
- * Menggabungkan semua informasi yang diperlukan oleh UI.
- *
- * @property greeting Salam sapaan (misal: "Selamat Pagi").
- * @property doctorName Nama dokter yang sedang login.
- * @property topQueueList Daftar 3 pasien teratas dalam antrian.
- * @property practiceStatus Objek [PracticeStatus] yang berisi info praktik (buka/tutup, antrian, dll).
- * @property isLoading Status loading awal.
- * @property waitingInQueue Jumlah total pasien yang sedang menunggu (termasuk dipanggil/dilayani).
- * @property nextQueueNumber Nomor antrian berikutnya yang akan dipanggil (status MENUNGGU).
- * @property selectedPatient Pasien yang dipilih untuk ditampilkan di bottom sheet detail.
- * @property todaySchedule Jadwal [DailyScheduleData] untuk hari ini.
- */
+import java.util.Locale
+
 data class DoctorUiState(
-    val greeting: String = "Selamat Datang",
+    val greeting: String = "Halo,",
     val doctorName: String = "Dokter",
-    val topQueueList: List<PatientQueueDetails> = emptyList(),
-    val practiceStatus: PracticeStatus? = null,
     val isLoading: Boolean = true,
-    val waitingInQueue: Int = 0,
-    val nextQueueNumber: String = "-",
-    val selectedPatient: PatientQueueDetails? = null,
-    val todaySchedule: DailyScheduleData? = null // <-- TAMBAHKAN BARIS INI
+    val practiceStatus: PracticeStatus? = null,
+    val operatingHours: String = "--:-- s/d --:--",
+    val currentlyServing: PatientQueueDetails? = null,
+    val patientCalled: PatientQueueDetails? = null,
+    val topQueueList: List<PatientQueueDetails> = emptyList(),
+    val nextQueueNumber: Int = 0,
+    val waitingCount: Int = 0,
+    val finishedCount: Int = 0
 )
-/**
- * ViewModel untuk [DoctorDashboardScreen].
- * Bertanggung jawab untuk mengumpulkan data dari berbagai repository,
- * menggabungkannya menjadi satu [DoctorUiState], dan mengelola logika
- * untuk pemilihan pasien.
- *
- * @param queueRepository Repository untuk data antrian, status praktik, dan jadwal.
- * @param authRepository Repository untuk data pengguna (dokter dan pasien).
- */
+
 class DoctorViewModel(
     private val queueRepository: QueueRepository,
     private val authRepository: AuthRepository
 ) : ViewModel() {
 
-    private val _selectedPatient = MutableStateFlow<PatientQueueDetails?>(null)
-    /**
-     * StateFlow publik yang diekspos ke UI.
-     * Menggunakan `combine` untuk menggabungkan 4 aliran data (Flow) menjadi satu [DoctorUiState].
-     * Setiap kali salah satu dari 4 flow ini berubah, `combine` akan dieksekusi ulang
-     * dan UI state akan diperbarui secara otomatis.
-     */
-    val uiState: StateFlow<DoctorUiState> = combine(
-        queueRepository.dailyQueuesFlow,
-        queueRepository.practiceStatusFlow,
-        authRepository.currentUser,
-        _selectedPatient
-    ) { queues, statuses, doctorUser, selectedPatient ->
+    private val _uiState = MutableStateFlow(DoctorUiState())
+    val uiState: StateFlow<DoctorUiState> = _uiState.asStateFlow()
 
-        val doctorId = AppContainer.CLINIC_ID
-        val allUsers = authRepository.getAllUsers()
+    private val clinicId = AppContainer.CLINIC_ID
 
-        val weeklySchedule = queueRepository.getDoctorSchedule(doctorId)
-        val practiceStatus = statuses[doctorId]
-        val calendar = Calendar.getInstance()
-        val dayOfWeekInt = calendar.get(Calendar.DAY_OF_WEEK) // Minggu=1, Senin=2, ..
-        val dayMapping = listOf("Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu")
-        val currentDayString = dayMapping[dayOfWeekInt - 1]
-        val todaySchedule = weeklySchedule.find { it.dayOfWeek.equals(currentDayString, ignoreCase = true) }
-        val activeQueues = queues
-            .filter { it.doctorId == doctorId && (it.status == QueueStatus.MENUNGGU || it.status == QueueStatus.DIPANGGIL || it.status == QueueStatus.DILAYANI) }
-            .sortedBy { it.queueNumber }
-        val topThreeQueues = activeQueues.take(3).map { queueItem ->
-            PatientQueueDetails(queueItem = queueItem, user = allUsers.find { it.uid == queueItem.userId })
-        }
-        val nextPatient = activeQueues.find { it.status == QueueStatus.MENUNGGU }
-        val nextQueueNumberString = nextPatient?.queueNumber?.toString() ?: "-"
-        val totalWaitingInQueue = activeQueues.size
+    init {
+        loadDashboardData()
+    }
 
-        DoctorUiState(
-            greeting = getGreetingBasedOnTime(),
-            doctorName = doctorUser?.name ?: "Dokter",
-            topQueueList = topThreeQueues,
-            practiceStatus = practiceStatus,
-            isLoading = false,
-            waitingInQueue = totalWaitingInQueue,
-            nextQueueNumber = nextQueueNumberString,
-            selectedPatient = selectedPatient,
-            todaySchedule = todaySchedule // <-- MASUKKAN DATA JADWAL KE STATE
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = DoctorUiState()
-    )
+    private fun loadDashboardData() {
+        val user = authRepository.currentUser.value
+        _uiState.update { it.copy(greeting = getGreeting(), doctorName = user?.name ?: "Dokter") }
 
-    private fun getGreetingBasedOnTime(): String {
-        val calendar = Calendar.getInstance()
-        return when (calendar.get(Calendar.HOUR_OF_DAY)) {
-            in 0..11 -> "Selamat Pagi"
-            in 12..13 -> "Selamat Siang"
-            in 14..17 -> "Selamat Sore"
-            else -> "Selamat Malam"
+        viewModelScope.launch {
+            combine(
+                queueRepository.dailyQueuesFlow,
+                queueRepository.practiceStatusFlow
+            ) { queues, statusMap ->
+
+                // 1. Ambil Status Praktik (Buka/Tutup Realtime)
+                val clinicStatus = statusMap[clinicId] ?: statusMap.values.firstOrNull()
+
+                // 2. [PERBAIKAN] Ambil Jadwal Hari Ini (Jam Operasional)
+                // Kita ambil dari getDoctorSchedule seperti di Admin
+                val weeklySchedule = queueRepository.getDoctorSchedule(clinicId)
+                val todaySchedule = getTodaySchedule(weeklySchedule)
+
+                // Format Jam (Contoh: "08:00 - 15:00")
+                val timeString = if (todaySchedule != null && todaySchedule.isOpen) {
+                    "${todaySchedule.startTime} - ${todaySchedule.endTime}"
+                } else {
+                    "Libur"
+                }
+
+                // 3. Mapping Data Antrian
+                val allDetails = queues.map { item ->
+                    val patientUser = authRepository.getUserById(item.userId)
+                    PatientQueueDetails(item, patientUser)
+                }
+
+                val serving = allDetails.find { it.queueItem.status == QueueStatus.DILAYANI }
+                val called = allDetails.find { it.queueItem.status == QueueStatus.DIPANGGIL }
+
+                val waitingList = allDetails
+                    .filter { it.queueItem.status == QueueStatus.MENUNGGU }
+                    .sortedBy { it.queueItem.queueNumber }
+
+                val finishedCount = allDetails.count { it.queueItem.status == QueueStatus.SELESAI }
+
+                _uiState.update { state ->
+                    state.copy(
+                        isLoading = false,
+                        practiceStatus = clinicStatus,
+                        operatingHours = timeString, // Sekarang data ini benar (String jam)
+                        currentlyServing = serving,
+                        patientCalled = called,
+                        topQueueList = waitingList,
+                        nextQueueNumber = waitingList.firstOrNull()?.queueItem?.queueNumber ?: 0,
+                        waitingCount = waitingList.size,
+                        finishedCount = finishedCount
+                    )
+                }
+            }.collect()
         }
     }
-    /**
-     * Dipanggil dari UI saat dokter mengklik kartu pasien.
-     * Menyimpan data pasien ke state [selectedPatient] untuk memicu bottom sheet.
-     * @param patient Data pasien yang diklik.
-     */
-    fun selectPatient(patient: PatientQueueDetails) {
-        _selectedPatient.value = patient
+
+    // Helper: Mencari jadwal hari ini (Senin, Selasa, dll)
+    private fun getTodaySchedule(schedules: List<com.example.project_mobileapps.data.model.DailyScheduleData>): com.example.project_mobileapps.data.model.DailyScheduleData? {
+        val calendar = Calendar.getInstance()
+        val dayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
+
+        // Mapping Calendar Java ke Nama Hari di Database Anda
+        val dayName = when (dayOfWeek) {
+            Calendar.SUNDAY -> "Minggu"
+            Calendar.MONDAY -> "Senin"
+            Calendar.TUESDAY -> "Selasa"
+            Calendar.WEDNESDAY -> "Rabu"
+            Calendar.THURSDAY -> "Kamis"
+            Calendar.FRIDAY -> "Jumat"
+            Calendar.SATURDAY -> "Sabtu"
+            else -> ""
+        }
+
+        return schedules.find { it.dayOfWeek.equals(dayName, ignoreCase = true) }
     }
-    /**
-     * Dipanggil dari UI saat bottom sheet ditutup (dismiss).
-     * Mengosongkan state [selectedPatient].
-     */
-    fun clearSelectedPatient() {
-        _selectedPatient.value = null
+
+    fun toggleQueue(isOpen: Boolean) {
+        viewModelScope.launch {
+            queueRepository.updatePracticeStatus(clinicId, isOpen)
+        }
+    }
+
+    fun callNextPatient() {
+        val nextPatient = _uiState.value.topQueueList.firstOrNull() ?: return
+        viewModelScope.launch {
+            queueRepository.updateQueueStatus(nextPatient.queueItem.id, QueueStatus.DIPANGGIL)
+            ToastManager.showToast("Memanggil A-${nextPatient.queueItem.queueNumber}", ToastType.INFO)
+        }
+    }
+
+    fun startConsultation(queueItem: QueueItem) {
+        viewModelScope.launch {
+            queueRepository.updateQueueStatus(queueItem.id, QueueStatus.DILAYANI)
+        }
+    }
+
+    private fun getGreeting(): String {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        return when (hour) {
+            in 0..10 -> "Selamat Pagi,"
+            in 11..14 -> "Selamat Siang,"
+            in 15..18 -> "Selamat Sore,"
+            else -> "Selamat Malam,"
+        }
     }
 }
-/**
- * Factory untuk [DoctorViewModel].
- * Diperlukan untuk meng-inject [QueueRepository] dan [AuthRepository].
- */
+
 class DoctorViewModelFactory(
     private val queueRepository: QueueRepository,
     private val authRepository: AuthRepository

@@ -53,7 +53,13 @@ fun MainScreen(rootNavController: NavHostController) {
                     onTakeQueueClick = { mainNavController.navigate(BottomNavItem.Queue.route) },
                     onProfileClick = { mainNavController.navigate(BottomNavItem.Profile.route) },
                     onSmartMealPlanClick = { rootNavController.navigate("smart_meal_plan") },
-                    onNewsClick = { rootNavController.navigate("news") }
+                    onNewsItemClick = { encodedUrl ->
+                        // Navigasi ke route detail artikel (Pastikan route ini sudah ada di AppNavigation)
+                        rootNavController.navigate("article_detail/$encodedUrl")
+                    },
+                    onSeeAllNewsClick = {
+                        rootNavController.navigate("news")
+                    },
                 )
             }
 

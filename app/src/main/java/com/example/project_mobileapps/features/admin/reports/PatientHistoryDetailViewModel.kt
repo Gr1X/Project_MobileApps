@@ -16,10 +16,9 @@ import kotlinx.coroutines.launch
 class PatientHistoryDetailViewModel(
     private val queueRepository: QueueRepository,
     private val authRepository: AuthRepository,
-    private val patientId: String // ID Pasien dikirim via Factory
+    private val patientId: String
 ) : ViewModel() {
 
-    // --- STATE FLOWS (WAJIB ADA) ---
     private val _historyList = MutableStateFlow<List<HistoryItem>>(emptyList())
     val historyList: StateFlow<List<HistoryItem>> = _historyList.asStateFlow()
 
@@ -37,21 +36,33 @@ class PatientHistoryDetailViewModel(
         viewModelScope.launch {
             _isLoading.value = true
 
-            // 1. Ambil Profil Pasien (User) - Asumsi ada fungsi getUserById di AuthRepo atau QueueRepo
-            // Jika belum ada, kita skip dulu atau ambil dummy.
-            // IDEALNYA: val user = authRepository.getUserById(patientId)
-            // _patientProfile.value = user
+            try {
+                // 1. Ambil History Kunjungan
+                val history = queueRepository.getVisitHistory(patientId)
+                _historyList.value = history
 
-            // 2. Ambil History Kunjungan
-            val history = queueRepository.getVisitHistory(patientId)
-            _historyList.value = history
+                // 2. [PERBAIKAN] Ambil Profil Pasien
+                // Kita ambil semua user lalu cari yang ID-nya cocok
+                val allUsers = authRepository.getAllUsers()
+                val user = allUsers.find { it.uid == patientId }
 
-            _isLoading.value = false
+                if (user != null) {
+                    _patientProfile.value = user
+                } else {
+                    // Jika user tidak ditemukan (mungkin terhapus), buat dummy agar loading hilang
+                    // atau biarkan null tapi handle di UI agar tidak stuck "Memuat"
+                }
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                // Pastikan loading berhenti apapun yang terjadi
+                _isLoading.value = false
+            }
         }
     }
 }
 
-// Factory untuk inject patientId
 class PatientHistoryDetailViewModelFactory(
     private val queueRepository: QueueRepository,
     private val authRepository: AuthRepository,

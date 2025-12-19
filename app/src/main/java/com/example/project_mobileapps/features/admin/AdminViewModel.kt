@@ -22,12 +22,6 @@ class AdminViewModel(private val queueRepository: QueueRepository) : ViewModel()
      * @param complaint The initial complaint or reason for the visit.
      * @param onResult A callback function that will be invoked with the [Result] of the operation.
      */
-    fun addManualQueue(patientName: String, complaint: String, onResult: (Result<*>) -> Unit) {
-        viewModelScope.launch {
-            val result = queueRepository.addManualQueue(patientName, complaint)
-            onResult(result)
-        }
-    }
 }
 
 /**

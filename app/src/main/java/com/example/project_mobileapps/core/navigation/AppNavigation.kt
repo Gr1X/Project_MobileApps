@@ -234,15 +234,29 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 )
             }
 
-            // Layar untuk menampilkan detail artikel berita dalam WebView.
+            // [RUTE BARU] Detail Artikel Berita (snake_case agar konsisten dengan MainScreen)
             composable(
-                "articleDetail/{encodedUrl}",
+                route = "article_detail/{encodedUrl}",
                 arguments = listOf(navArgument("encodedUrl") { type = NavType.StringType })
             ) { backStackEntry ->
                 val encodedUrl = backStackEntry.arguments?.getString("encodedUrl") ?: ""
-                val decodedUrl = URLDecoder.decode(encodedUrl, StandardCharsets.UTF_8.toString())
+                // Decode URL agar bisa dibaca WebView
+                val decodedUrl = try {
+                    URLDecoder.decode(encodedUrl, StandardCharsets.UTF_8.toString())
+                } catch (e: Exception) { "" }
+
                 ArticleDetailScreen(
                     url = decodedUrl,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            // [RUTE BARU] List Berita
+            composable("news") {
+                NewsScreen(
+                    onNewsClick = { encodedUrl ->
+                        navController.navigate("article_detail/$encodedUrl")
+                    },
                     onNavigateBack = { navController.popBackStack() }
                 )
             }

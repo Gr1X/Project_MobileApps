@@ -4,6 +4,7 @@ package com.example.project_mobileapps.features.doctor
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.project_mobileapps.data.model.MedicalRecord
 import com.example.project_mobileapps.data.model.Medicine
 import com.example.project_mobileapps.data.model.QueueItem
 import com.example.project_mobileapps.data.repo.MedicineRepository
@@ -17,7 +18,7 @@ import kotlinx.coroutines.launch
 // State Khusus untuk Layar Input Dokter
 data class MedicalRecordUiState(
     val medicines: List<Medicine> = emptyList(),      // Untuk Dropdown Obat
-    val patientHistory: List<QueueItem> = emptyList(), // Untuk BottomSheet Riwayat
+    val patientHistory: List<MedicalRecord> = emptyList(),
     val isHistoryLoading: Boolean = false,
     val isSubmitting: Boolean = false,
     val submitSuccess: Boolean = false,
@@ -53,6 +54,7 @@ class MedicalRecordViewModel(
 
             if (result.isSuccess) {
                 _uiState.update {
+                    // Sekarang tipe data sudah cocok!
                     it.copy(isHistoryLoading = false, patientHistory = result.getOrDefault(emptyList()))
                 }
             } else {

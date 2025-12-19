@@ -7,342 +7,441 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Circle
+import androidx.compose.material.icons.filled.DoorFront
+import androidx.compose.material.icons.filled.MeetingRoom
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavHostController
-import com.example.project_mobileapps.data.model.DailyScheduleData
-import com.example.project_mobileapps.data.model.PracticeStatus
-import com.example.project_mobileapps.data.model.QueueStatus
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.project_mobileapps.R
+import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.features.admin.manageSchedule.PatientQueueDetails
+import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
+import com.example.project_mobileapps.ui.themes.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-/**
- * Composable utama untuk layar Dashboard Dokter.
- * Ini adalah layar stateful yang mengamati [DoctorViewModel].
- *
- * @param viewModel ViewModel [DoctorViewModel] yang menyediakan [DoctorUiState].
- * @param navController Kontroler navigasi (saat ini tidak digunakan di layar ini,
- * tapi bagus untuk dimiliki jika ada navigasi keluar dari dashboard).
- */
+
+// Enum State untuk Logic Tampilan
+enum class PatientCardState {
+    SERVING,    // Hijau
+    CALLED,     // Kuning/Orange
+    READY_NEXT  // Biru (Brand)
+}
+
 @Composable
 fun DoctorDashboardScreen(
     viewModel: DoctorViewModel,
-    navController: NavHostController
+    onNavigateToQueueList: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    /**
-     * Logika untuk menampilkan [PatientDetailBottomSheet].
-     * Jika [uiState.selectedPatient] tidak null, BottomSheet akan ditampilkan.
-     * `onDismiss` akan memanggil ViewModel untuk meng-clear state.
-     */
-    if (uiState.selectedPatient != null) {
-        PatientDetailBottomSheet(
-            patientDetails = uiState.selectedPatient!!,
-            onDismiss = { viewModel.clearSelectedPatient() }
-        )
-    }
+    val currentUser by AuthRepository.currentUser.collectAsState()
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            DoctorDashboardHeader(uiState = uiState)
-        }
+    // State Konfirmasi
+    var showStatusSheet by remember { mutableStateOf(false) }
+    var pendingStatusValue by remember { mutableStateOf(false) }
 
-        item {
-            Column(Modifier.padding(horizontal = 16.dp)) {
-                Text("3 Antrian Teratas", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    // --- LOGIC HIERARKI DATA ---
+    val activePatient = uiState.currentlyServing
+    val calledPatient = uiState.patientCalled
+    val nextPatient = if (activePatient == null && calledPatient == null) uiState.topQueueList.firstOrNull() else null
+
+    val listStartIndex = if (nextPatient != null) 1 else 0
+    val queueListToShow = uiState.topQueueList.drop(listStartIndex).take(3)
+
+    Scaffold(containerColor = Color(0xFFF8F9FA)) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(bottom = 100.dp, top = 16.dp, start = 20.dp, end = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            // 1. HEADER
+            item {
+                DoctorProfileHeader(
+                    greeting = uiState.greeting,
+                    name = uiState.doctorName,
+                    photoUrl = currentUser?.profilePictureUrl
+                )
             }
-        }
 
-        if (uiState.isLoading) {
-            item { CircularProgressIndicator(modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally)) }
-        } else if (uiState.topQueueList.isEmpty()) {
+            // 2. STATUS PRAKTIK (Desain Baru: Control Center)
+            item {
+                PracticeControlCard(
+                    isOpen = uiState.practiceStatus?.isPracticeOpen ?: false,
+                    operatingHours = uiState.operatingHours,
+                    onToggle = { isToggled ->
+                        pendingStatusValue = isToggled
+                        showStatusSheet = true
+                    }
+                )
+            }
+
+            // 3. STATISTIK
             item {
                 Text(
-                    "Belum ada pasien dalam antrian.",
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 24.dp),
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "Ringkasan Hari Ini",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    DashboardStatItem(
+                        modifier = Modifier.weight(1f),
+                        label = "Menunggu",
+                        value = uiState.waitingCount.toString(),
+                        icon = Icons.Outlined.People,
+                        color = StatusWarning
+                    )
+                    DashboardStatItem(
+                        modifier = Modifier.weight(1f),
+                        label = "Selesai",
+                        value = uiState.finishedCount.toString(),
+                        icon = Icons.Outlined.CheckCircle,
+                        color = StatusSuccess
+                    )
+                }
             }
+
+            // 4. HERO CARD (Status Ruangan)
+            item {
+                SectionHeader("Status Ruangan", "Monitor >", onNavigateToQueueList)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                when {
+                    activePatient != null -> HeroPatientCard(activePatient, PatientCardState.SERVING, onNavigateToQueueList)
+                    calledPatient != null -> HeroPatientCard(calledPatient, PatientCardState.CALLED, onNavigateToQueueList)
+                    nextPatient != null -> HeroPatientCard(nextPatient, PatientCardState.READY_NEXT, onNavigateToQueueList)
+                    else -> EmptyStateHero()
+                }
+            }
+
+            // 5. LIST ANTRIAN
+            if (queueListToShow.isNotEmpty()) {
+                item {
+                    Text(
+                        "Antrian Berikutnya",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
+                    )
+                }
+                items(queueListToShow) { item ->
+                    AdminStyleQueueItem(item)
+                }
+            }
+        }
+
+        // Bottom Sheet Confirmation
+        if (showStatusSheet) {
+            val isOpening = pendingStatusValue
+            ConfirmationBottomSheet(
+                onDismiss = { showStatusSheet = false },
+                onConfirm = {
+                    viewModel.toggleQueue(pendingStatusValue)
+                    showStatusSheet = false
+                },
+                title = if (isOpening) "Buka Praktik?" else "Tutup Praktik?",
+                text = if (isOpening) "Pasien dapat mengambil antrian baru." else "Sistem tidak akan menerima antrian baru."
+            )
+        }
+    }
+}
+
+// ===========================================================================
+// COMPONENT IMPLEMENTATION (REFINED UI)
+// ===========================================================================
+
+@Composable
+fun SectionHeader(title: String, actionText: String, onAction: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
+        )
+        Text(
+            text = actionText,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = BrandPrimary,
+            modifier = Modifier.clickable { onAction() }
+        )
+    }
+}
+
+/**
+ * Kartu Status Praktik Baru (Modern Control Center)
+ * Lebih informatif, layout rapi, dan ada indikator visual background.
+ */
+@Composable
+fun PracticeControlCard(isOpen: Boolean, operatingHours: String, onToggle: (Boolean) -> Unit) {
+    val backgroundColor = if (isOpen) Color(0xFFECFDF5) else Color(0xFFF1F5F9) // Hijau Muda vs Abu
+    val accentColor = if (isOpen) Color(0xFF10B981) else Color(0xFF64748B) // Hijau vs Abu Tua
+    val icon = if (isOpen) Icons.Filled.MeetingRoom else Icons.Filled.DoorFront
+    val statusText = if (isOpen) "PRAKTIK SEDANG BUKA" else "PRAKTIK DITUTUP"
+
+    // Tanggal Hari Ini
+    val todayDate = remember { SimpleDateFormat("EEEE, dd MMM yyyy", Locale("id", "ID")).format(Date()) }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(0.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.2f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            // Background Decoration Icon (Transparan)
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = accentColor.copy(alpha = 0.08f),
+                modifier = Modifier
+                    .size(120.dp)
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 20.dp, y = 20.dp)
+            )
+
+            Column(modifier = Modifier.padding(20.dp)) {
+                // Baris Atas: Chip Status & Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Status Chip
+                    Surface(
+                        color = accentColor,
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Circle, null, tint = Color.White, modifier = Modifier.size(8.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = statusText,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                    }
+
+                    // Switch
+                    Switch(
+                        checked = isOpen,
+                        onCheckedChange = onToggle,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = accentColor,
+                            uncheckedThumbColor = Color.White,
+                            uncheckedTrackColor = Color.LightGray
+                        ),
+                        modifier = Modifier.scale(0.9f)
+                    )
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // Baris Bawah: Jam & Tanggal
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.AccessTime, null, tint = accentColor, modifier = Modifier.size(28.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = operatingHours,
+                            style = MaterialTheme.typography.headlineSmall, // Font Besar untuk Jam
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1E293B)
+                        )
+                        Text(
+                            text = todayDate,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DoctorProfileHeader(greeting: String, name: String, photoUrl: String?) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = greeting, style = MaterialTheme.typography.titleMedium, color = TextSecondary)
+            Text(
+                text = name,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+        }
+
+        if (!photoUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = photoUrl,
+                contentDescription = null,
+                modifier = Modifier.size(60.dp).clip(CircleShape).background(Color.White),
+                contentScale = ContentScale.Crop
+            )
         } else {
-            items(uiState.topQueueList, key = { it.queueItem.queueNumber }) { patientDetails ->
-                SimplePatientInfoCard(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    patientDetails = patientDetails,
-                    onClick = { viewModel.selectPatient(patientDetails) }
+            Box(
+                modifier = Modifier
+                    .size(60.dp)
+                    .background(BrandPrimary.copy(alpha = 0.1f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = name.take(1).uppercase(),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = BrandPrimary
                 )
             }
         }
     }
 }
-/**
- * Composable helper untuk bagian header dashboard.
- * @param uiState State UI saat ini.
- */
 
 @Composable
-fun DoctorDashboardHeader(uiState: DoctorUiState) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 16.dp)
-    ) {
-        Text(
-            text = "${uiState.greeting},",
-            style = MaterialTheme.typography.titleMedium
-        )
-        Text(
-            text = "${uiState.doctorName} 👋",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold
-        )
-        Spacer(Modifier.height(24.dp))
-
-        PracticeStatusCard(practiceStatus = uiState.practiceStatus, schedule = uiState.todaySchedule)
-
-        Spacer(Modifier.height(24.dp))
-
-        StatsHeader(
-            nextQueue = uiState.nextQueueNumber,
-            waiting = uiState.waitingInQueue
-        )
-    }
-}
-/**
- * Composable helper untuk menampilkan dua kartu statistik.
- * @param nextQueue Nomor antrian berikutnya (String, bisa "-").
- * @param waiting Jumlah total antrian (Int).
- */
-@Composable
-fun StatsHeader(nextQueue: String, waiting: Int) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        StatCard(
-            label = "Pasien Selanjutnya",
-            value = nextQueue,
-            icon = Icons.Outlined.ConfirmationNumber,
-            modifier = Modifier.weight(1f)
-        )
-        StatCard(
-            label = "Total Antrian",
-            value = waiting.toString(),
-            icon = Icons.Outlined.Groups,
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-/**
- * Composable helper (reusable) untuk satu kartu statistik.
- * @param label Teks label (misal: "Total Antrian").
- * @param value Teks nilai (misal: "5").
- * @param icon Ikon untuk ditampilkan.
- * @param modifier Modifier.
- */
-@Composable
-fun StatCard(
-    label: String,
-    value: String,
-    icon: ImageVector,
-    modifier: Modifier = Modifier
-) {
-    // Menggunakan Card standar dengan warna Surface (putih)
+fun DashboardStatItem(modifier: Modifier, label: String, value: String, icon: ImageVector, color: Color) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp) // Beri sedikit bayangan
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // Ikon menggunakan warna Primary (biru) sebagai aksen
-            Icon(imageVector = icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
-            Spacer(modifier = Modifier.height(8.dp))
-            // Teks menggunakan warna teks standar
-            Text(text = value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-            Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-/**
- * Composable helper (reusable) untuk menampilkan info pasien di daftar antrian.
- * @param patientDetails Data detail pasien dan antriannya.
- * @param onClick Aksi yang dijalankan saat kartu diklik.
- * @param modifier Modifier.
- */
-@Composable
-fun SimplePatientInfoCard(
-    patientDetails: PatientQueueDetails,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "No. ${patientDetails.queueItem.queueNumber}",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(end = 16.dp)
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(patientDetails.queueItem.userName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Keluhan: ${patientDetails.queueItem.keluhan}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
-                )
-            }
-            StatusChip(status = patientDetails.queueItem.status)
-        }
-    }
-}
-/**
- * Composable helper (reusable) untuk menampilkan chip status berwarna.
- * @param status Enum [QueueStatus] yang akan ditampilkan.
- */
-@Composable
-fun StatusChip(status: QueueStatus) {
-    val (text, backgroundColor, contentColor) = when (status) {
-        QueueStatus.MENUNGGU -> Triple("Menunggu", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
-        QueueStatus.DIPANGGIL -> Triple("Dipanggil", Color(0xFFFFF9C4), Color.Black) // Kuning
-        QueueStatus.DILAYANI -> Triple("Dilayani", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
-        QueueStatus.SELESAI -> Triple("Selesai", Color(0xFFC8E6C9), Color.Black) // Hijau muda
-        QueueStatus.DIBATALKAN -> Triple("Batal", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
-    }
-    Text(
-        text = text,
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(backgroundColor)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        style = MaterialTheme.typography.labelLarge,
-        color = contentColor
-    )
-}
-
-// Tambahkan kode ini di bagian bawah file DoctorDashboardScreen.kt
-/**
- * Composable untuk Bottom Sheet yang menampilkan detail info pasien.
- * @param patientDetails Data lengkap pasien yang dipilih.
- * @param onDismiss Callback saat bottom sheet ditutup.
- */
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PatientDetailBottomSheet(
-    patientDetails: PatientQueueDetails,
-    onDismiss: () -> Unit
-) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .padding(horizontal = 24.dp, vertical = 16.dp)
-                .padding(bottom = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.Default.AccountCircle,
-                contentDescription = "Profile Picture",
-                modifier = Modifier.size(80.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                patientDetails.user?.name ?: "N/A",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-            Divider()
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Detail Info
-            DetailRow(label = "Nomor Telepon", value = patientDetails.user?.phoneNumber ?: "N/A")
-            DetailRow(label = "Email", value = patientDetails.user?.email ?: "N/A")
-            DetailRow(label = "Jenis Kelamin", value = patientDetails.user?.gender?.name ?: "N/A")
-            DetailRow(label = "Tanggal Lahir", value = patientDetails.user?.dateOfBirth ?: "N/A")
-        }
-    }
-}
-/**
- * Composable helper (reusable) untuk baris detail di bottom sheet.
- * @param label Label (misal: "Email").
- * @param value Nilai (misal: "pasien@gmail.com").
- */
-@Composable
-fun DetailRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-    }
-}
-/**
- * Composable helper (reusable) untuk kartu status praktik.
- * Menampilkan BUKA/TUTUP, tanggal, dan jam praktik.
- * @param practiceStatus Objek [PracticeStatus] dari state.
- * @param schedule Objek [DailyScheduleData] dari state.
- */
-@Composable
-fun PracticeStatusCard(practiceStatus: PracticeStatus?, schedule: DailyScheduleData?) {
-    val isPracticeOpen = practiceStatus?.isPracticeOpen ?: false
-    val statusText = if (isPracticeOpen) "BUKA" else "TUTUP"
-    val statusColor = if (isPracticeOpen) Color(0xFF00C853) else MaterialTheme.colorScheme.error
-    val jamPraktik = if (schedule != null && schedule.isOpen) "${schedule.startTime} - ${schedule.endTime}" else "Tidak ada jadwal hari ini"
-    val currentDate = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale("id", "ID")).format(Date())
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(2.dp)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(1.dp),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(currentDate, style = MaterialTheme.typography.labelMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Status: ", style = MaterialTheme.typography.titleMedium)
-                Text(statusText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = statusColor)
+            Box(
+                modifier = Modifier.size(40.dp).background(color.copy(0.1f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = color, modifier = Modifier.size(20.dp))
             }
-            Text("Jam Praktik: $jamPraktik", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(12.dp))
+            Text(value, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = TextPrimary)
+            Text(label, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+        }
+    }
+}
+
+@Composable
+fun HeroPatientCard(
+    patient: PatientQueueDetails,
+    state: PatientCardState,
+    onClick: () -> Unit
+) {
+    val (accentColor, statusText) = when(state) {
+        PatientCardState.SERVING -> StatusSuccess to "SEDANG DIPERIKSA"
+        PatientCardState.CALLED -> StatusWarning to "DIPANGGIL..."
+        PatientCardState.READY_NEXT -> BrandPrimary to "ANTRIAN BERIKUTNYA"
+        else -> Color.Gray to "-"
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(2.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }
+    ) {
+        Column {
+            Box(modifier = Modifier.fillMaxWidth().background(accentColor).padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                Text(statusText, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White, letterSpacing = 1.sp)
+            }
+            Row(
+                modifier = Modifier.padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("No. Antrian", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text("${patient.queueItem.queueNumber}", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold, color = accentColor)
+                }
+                Box(modifier = Modifier.width(1.dp).height(40.dp).background(Color.LightGray.copy(0.5f)))
+                Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
+                    Text(patient.user?.name ?: patient.queueItem.userName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Keluhan: ${patient.queueItem.keluhan}", style = MaterialTheme.typography.bodyMedium, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = Color.LightGray)
+            }
+        }
+    }
+}
+
+@Composable
+fun AdminStyleQueueItem(item: PatientQueueDetails) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(0.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp).background(Color(0xFFF1F5F9), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("${item.queueItem.queueNumber}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(item.user?.name ?: item.queueItem.userName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                Text(item.queueItem.keluhan, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            }
+            Surface(color = StatusWarning.copy(0.1f), shape = RoundedCornerShape(6.dp)) {
+                Text("Menunggu", style = MaterialTheme.typography.labelSmall, color = StatusWarning, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun EmptyStateHero() {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(32.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(Icons.Outlined.Inbox, null, tint = Color.LightGray, modifier = Modifier.size(48.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Tidak ada antrian aktif", color = TextSecondary)
         }
     }
 }

@@ -6,8 +6,10 @@ import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,33 +18,32 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockClock
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.project_mobileapps.R
 import com.example.project_mobileapps.data.model.User
-import com.example.project_mobileapps.ui.components.PasswordTextField
+import com.example.project_mobileapps.ui.components.PrimaryButton
 import com.example.project_mobileapps.ui.components.PrimaryTextField
 import com.example.project_mobileapps.ui.themes.TextSecondary
+import com.example.project_mobileapps.utils.PasswordStrength
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.outlined.LockClock
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.unit.sp
-import com.example.project_mobileapps.utils.PasswordStrength
 
 private enum class AuthTab { LOGIN, REGISTER }
 
@@ -50,7 +51,7 @@ private enum class AuthTab { LOGIN, REGISTER }
 @Composable
 fun AuthScreen(
     authViewModel: AuthViewModel,
-    startScreen: String,
+    startScreen: String = "login", // Default value added
     onAuthSuccess: (User) -> Unit,
     onNavigateToCompleteProfile: () -> Unit
 ) {
@@ -97,6 +98,7 @@ fun AuthScreen(
         }
     }
 
+    // --- DIALOG LUPA PASSWORD ---
     if (showForgotPassDialog) {
         ForgotPasswordDialog(
             onDismiss = { showForgotPassDialog = false },
@@ -106,14 +108,13 @@ fun AuthScreen(
         )
     }
 
-    // --- LOGIC TAMPILAN ---
+    // --- UI UTAMA ---
     if (authState.showVerificationDialog) {
         // Tampilkan Layar Tunggu Verifikasi Email (Magic Link)
         VerificationWaitingScreen(
             email = authState.registerEmail,
-            isSuccess = authState.isVerifiedSuccess, // Trigger animasi centang hijau
+            isSuccess = authState.isVerifiedSuccess,
             onAnimationFinished = {
-                // Saat animasi selesai, cek mau kemana
                 if (authState.isProfileIncomplete) {
                     onNavigateToCompleteProfile()
                 } else if (authState.loggedInUser != null) {
@@ -126,23 +127,25 @@ fun AuthScreen(
         )
     } else {
         // TAMPILAN FORM LOGIN / REGISTER
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
-        ) {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background
+        ) { padding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(padding)
                     .padding(horizontal = 24.dp)
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.weight(0.5f))
+                Spacer(modifier = Modifier.weight(0.2f)) // Spacer dinamis
 
+                // 1. HEADER
                 AuthHeader(selectedTab)
 
                 Spacer(modifier = Modifier.height(32.dp))
 
+                // 2. TAB SELECTOR (Login / Register)
                 AuthTabSelector(selectedTab) { newTab ->
                     selectedTab = newTab
                     authViewModel.resetAuthState()
@@ -150,102 +153,132 @@ fun AuthScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
+                // 3. FORM CONTENT (ANIMATED)
                 AnimatedContent(
                     targetState = selectedTab,
-                    transitionSpec = { fadeIn(tween(200, 90)) togetherWith fadeOut(tween(90)) },
+                    transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
                     label = "Auth Form Animation"
                 ) { tab ->
                     if (tab == AuthTab.LOGIN) {
                         LoginFields(
-                            email = authState.loginEmail, onEmailChange = authViewModel::onLoginEmailChange,
-                            password = authState.loginPassword, onPasswordChange = authViewModel::onLoginPasswordChange,
-                            emailError = authState.loginEmailError, passwordError = authState.loginPasswordError
+                            email = authState.loginEmail,
+                            onEmailChange = authViewModel::onLoginEmailChange,
+                            password = authState.loginPassword,
+                            onPasswordChange = authViewModel::onLoginPasswordChange,
+                            emailError = authState.loginEmailError,
+                            passwordError = authState.loginPasswordError
                         )
                     } else {
+                        // Menggunakan RegisterFieldsSimple yang Anda minta (tanpa HP, karena HP di Complete Profile)
                         RegisterFieldsSimple(
-                            name = authState.registerName, onNameChange = authViewModel::onRegisterNameChange,
-                            email = authState.registerEmail, onEmailChange = authViewModel::onRegisterEmailChange,
-                            password = authState.registerPassword, onPasswordChange = authViewModel::onRegisterPasswordChange,
-                            confirmPassword = authState.confirmPassword, onConfirmPasswordChange = authViewModel::onConfirmPasswordChange,
+                            name = authState.registerName,
+                            onNameChange = authViewModel::onRegisterNameChange,
+                            email = authState.registerEmail,
+                            onEmailChange = authViewModel::onRegisterEmailChange,
+                            password = authState.registerPassword,
+                            onPasswordChange = authViewModel::onRegisterPasswordChange,
+                            confirmPassword = authState.confirmPassword,
+                            onConfirmPasswordChange = authViewModel::onConfirmPasswordChange,
                             passwordStrength = authState.passwordStrength,
-                            isPrivacyAccepted = authState.isPrivacyAccepted, onPrivacyChange = authViewModel::onPrivacyChange,
-                            nameError = authState.registerNameError, emailError = authState.registerEmailError,
-                            passwordError = authState.registerPasswordError, confirmPasswordError = authState.confirmPasswordError,
+                            isPrivacyAccepted = authState.isPrivacyAccepted,
+                            onPrivacyChange = authViewModel::onPrivacyChange,
+                            nameError = authState.registerNameError,
+                            emailError = authState.registerEmailError,
+                            passwordError = authState.registerPasswordError,
+                            confirmPasswordError = authState.confirmPasswordError,
                             privacyError = authState.privacyError
                         )
                     }
                 }
 
+                // 4. LUPA PASSWORD (Hanya di Tab Login)
                 if (selectedTab == AuthTab.LOGIN) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
                         TextButton(onClick = { showForgotPassDialog = true }) {
-                            Text("Lupa Password?", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                            Text(
+                                "Lupa Password?",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 } else {
-                    Spacer(modifier = Modifier.height(48.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // --- TOMBOL UTAMA ---
-                Button(
+                // 5. TOMBOL UTAMA (LOGIN/DAFTAR)
+                PrimaryButton(
+                    text = if (selectedTab == AuthTab.LOGIN) "Masuk" else "Daftar Sekarang",
                     onClick = {
                         if (selectedTab == AuthTab.LOGIN) authViewModel.loginUser()
-                        else authViewModel.registerInitial() // Gunakan registerInitial (Auth Only)
+                        else authViewModel.registerInitial()
                     },
-                    enabled = !authState.isLoading,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    if (authState.isLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
-                    else Text(if (selectedTab == AuthTab.LOGIN) "Login" else "Daftar", style = MaterialTheme.typography.labelLarge)
-                }
+                    isLoading = authState.isLoading
+                )
 
+                // Error Global Message
                 authState.error?.let {
-                    Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 16.dp), textAlign = TextAlign.Center)
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-                DividerWithText("Atau lanjutkan dengan")
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    SocialLoginButton(
-                        text = "Google",
-                        iconRes = R.drawable.google, // Pastikan icon ada
-                        onClick = {
-                            // [PERBAIKAN]: Sign Out dulu dari Google Client agar dialog pemilihan akun muncul lagi
-                            googleSignInClient.signOut().addOnCompleteListener {
-                                // Setelah logout lokal sukses, baru luncurkan intent login
-                                googleLauncher.launch(googleSignInClient.signInIntent)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(top = 16.dp),
+                        textAlign = TextAlign.Center
                     )
                 }
+
                 Spacer(modifier = Modifier.height(32.dp))
+
+                // 6. DIVIDER
+                DividerWithText("Atau lanjutkan dengan")
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // 7. SOCIAL LOGIN (GOOGLE)
+                SocialLoginButton(
+                    text = "Google",
+                    // Pastikan Anda punya icon R.drawable.ic_google atau ganti dengan R.drawable.ic_launcher_foreground sementara
+                    iconRes = R.drawable.google
+                    ,
+                    onClick = {
+                        // Sign Out dulu agar prompt akun muncul kembali
+                        googleSignInClient.signOut().addOnCompleteListener {
+                            googleLauncher.launch(googleSignInClient.signInIntent)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.weight(0.5f))
             }
         }
     }
 }
 
-// --- Helper Composables ---
+// ===========================================================================
+// HELPER COMPOSABLES (Semua Composable yang Anda minta ada di sini)
+// ===========================================================================
 
-// (Sertakan juga fungsi-fungsi helper lama: AuthHeader, AuthTabSelector, LoginFields, DividerWithText, SocialLoginButton, PasswordStrengthBar)
-// Copy paste fungsi-fungsi helper tersebut dari file AuthScreen.kt sebelumnya.
 @Composable
 private fun AuthHeader(selectedTab: AuthTab) {
-    val title = if (selectedTab == AuthTab.LOGIN) "Login ke Akun Anda" else "Buat Akun untuk Memulai"
-    Text(
-        text = title,
-        style = MaterialTheme.typography.headlineMedium,
-        textAlign = TextAlign.Center
-    )
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = if (selectedTab == AuthTab.LOGIN) "Selamat Datang!" else "Buat Akun Baru",
+            style = MaterialTheme.typography.headlineMedium,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = if (selectedTab == AuthTab.LOGIN) "Silakan masuk untuk melanjutkan." else "Bergabunglah untuk layanan kesehatan.",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 @Composable
@@ -253,26 +286,40 @@ private fun AuthTabSelector(selectedTab: AuthTab, onTabSelected: (AuthTab) -> Un
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(0.dp)
+        elevation = CardDefaults.cardElevation(2.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().height(56.dp).padding(6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            val loginButtonColors = if (selectedTab == AuthTab.LOGIN)
-                ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-            else
-                ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = TextSecondary)
-
-            val registerButtonColors = if (selectedTab == AuthTab.REGISTER)
-                ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-            else
-                ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = TextSecondary)
-
-            Button(onClick = { onTabSelected(AuthTab.LOGIN) }, colors = loginButtonColors, shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f).fillMaxHeight()) {
-                Text("Login", style = MaterialTheme.typography.labelLarge)
+            // Tombol Tab Login
+            Button(
+                onClick = { onTabSelected(AuthTab.LOGIN) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (selectedTab == AuthTab.LOGIN) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    contentColor = if (selectedTab == AuthTab.LOGIN) MaterialTheme.colorScheme.onPrimary else TextSecondary
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f),
+                elevation = if (selectedTab == AuthTab.LOGIN) ButtonDefaults.buttonElevation(2.dp) else ButtonDefaults.buttonElevation(0.dp)
+            ) {
+                Text("Masuk", style = MaterialTheme.typography.labelLarge)
             }
-            Button(onClick = { onTabSelected(AuthTab.REGISTER) }, colors = registerButtonColors, shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f).fillMaxHeight()) {
+
+            // Tombol Tab Daftar
+            Button(
+                onClick = { onTabSelected(AuthTab.REGISTER) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (selectedTab == AuthTab.REGISTER) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    contentColor = if (selectedTab == AuthTab.REGISTER) MaterialTheme.colorScheme.onPrimary else TextSecondary
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f),
+                elevation = if (selectedTab == AuthTab.REGISTER) ButtonDefaults.buttonElevation(2.dp) else ButtonDefaults.buttonElevation(0.dp)
+            ) {
                 Text("Daftar", style = MaterialTheme.typography.labelLarge)
             }
         }
@@ -292,14 +339,17 @@ private fun LoginFields(
             label = "Alamat Email",
             leadingIcon = Icons.Outlined.Email,
             errorMessage = emailError,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next)
         )
-        PasswordTextField(
+        // Menggunakan PrimaryTextField dengan mode Password
+        PrimaryTextField(
             value = password,
             onValueChange = onPasswordChange,
-            label = "Password",
+            label = "Kata Sandi",
             leadingIcon = Icons.Outlined.Lock,
-            errorMessage = passwordError
+            isPassword = true,
+            errorMessage = passwordError,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)
         )
     }
 }
@@ -310,75 +360,49 @@ private fun RegisterFieldsSimple(
     email: String, onEmailChange: (String) -> Unit,
     password: String, onPasswordChange: (String) -> Unit,
     confirmPassword: String, onConfirmPasswordChange: (String) -> Unit,
-    passwordStrength: com.example.project_mobileapps.utils.PasswordStrength,
+    passwordStrength: PasswordStrength,
     isPrivacyAccepted: Boolean, onPrivacyChange: (Boolean) -> Unit,
     nameError: String?, emailError: String?, passwordError: String?, confirmPasswordError: String?, privacyError: String?
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        PrimaryTextField(value = name, onValueChange = onNameChange, label = "Username", leadingIcon = Icons.Outlined.Person, errorMessage = nameError)
-        PrimaryTextField(value = email, onValueChange = onEmailChange, label = "Email", leadingIcon = Icons.Outlined.Email, errorMessage = emailError, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+        PrimaryTextField(
+            value = name,
+            onValueChange = onNameChange,
+            label = "Nama Lengkap",
+            leadingIcon = Icons.Outlined.Person,
+            errorMessage = nameError,
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next)
+        )
+        PrimaryTextField(
+            value = email,
+            onValueChange = onEmailChange,
+            label = "Email",
+            leadingIcon = Icons.Outlined.Email,
+            errorMessage = emailError,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next)
+        )
 
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            PasswordTextField(value = password, onValueChange = onPasswordChange, label = "Password", leadingIcon = Icons.Outlined.Lock, errorMessage = passwordError)
+            PrimaryTextField(
+                value = password,
+                onValueChange = onPasswordChange,
+                label = "Buat Password",
+                leadingIcon = Icons.Outlined.Lock,
+                isPassword = true,
+                errorMessage = passwordError,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next)
+            )
             if (password.isNotEmpty()) PasswordStrengthBar(strength = passwordStrength)
         }
 
-        PasswordTextField(value = confirmPassword, onValueChange = onConfirmPasswordChange, label = "Ulangi Password", leadingIcon = Icons.Outlined.LockClock, errorMessage = confirmPasswordError)
-
-        Column {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().clickable { onPrivacyChange(!isPrivacyAccepted) }
-            ) {
-                Checkbox(checked = isPrivacyAccepted, onCheckedChange = onPrivacyChange, colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary))
-                Text("Saya setuju dengan Syarat & Ketentuan.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp))
-            }
-            if (privacyError != null) Text(text = privacyError, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 12.dp))
-        }
-    }
-}
-
-@Composable
-private fun RegisterFields(
-    name: String, onNameChange: (String) -> Unit,
-    email: String, onEmailChange: (String) -> Unit,
-    password: String, onPasswordChange: (String) -> Unit,
-    phone: String, onPhoneChange: (String) -> Unit,
-
-    nameError: String?, emailError: String?, passwordError: String?,
-    phoneError: String?, confirmPassword: String, privacyError: String?,
-
-    onConfirmPasswordChange: (String) -> Unit,
-    confirmPasswordError: String?,
-    passwordStrength: PasswordStrength, // Parameter Baru
-    isPrivacyAccepted: Boolean,         // Parameter Baru
-    onPrivacyChange: (Boolean) -> Unit, // Parameter Baru
-    onDone: () -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         PrimaryTextField(
-            value = email, onValueChange = onEmailChange, label = "Alamat Email",
-            leadingIcon = Icons.Outlined.Email, errorMessage = emailError,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            PasswordTextField(
-                value = password, onValueChange = onPasswordChange, label = "Buat Password",
-                leadingIcon = Icons.Outlined.Lock, errorMessage = passwordError
-            )
-            // INDIKATOR KEKUATAN PASSWORD
-            if (password.isNotEmpty()) {
-                PasswordStrengthBar(strength = passwordStrength)
-            }
-        }
-
-        // --- KONFIRMASI PASSWORD ---
-        PasswordTextField(
             value = confirmPassword,
             onValueChange = onConfirmPasswordChange,
             label = "Ulangi Password",
-            leadingIcon = Icons.Outlined.LockClock, // Icon beda dikit biar variasi
-            errorMessage = confirmPasswordError
+            leadingIcon = Icons.Outlined.LockClock,
+            isPassword = true,
+            errorMessage = confirmPasswordError,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)
         )
 
         Column {
@@ -386,7 +410,7 @@ private fun RegisterFields(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onPrivacyChange(!isPrivacyAccepted) } // Klik teks juga bisa centang
+                    .clickable { onPrivacyChange(!isPrivacyAccepted) }
             ) {
                 Checkbox(
                     checked = isPrivacyAccepted,
@@ -394,13 +418,12 @@ private fun RegisterFields(
                     colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
                 )
                 Text(
-                    text = "Saya setuju dengan Syarat & Ketentuan serta Kebijakan Privasi.",
+                    text = "Saya setuju dengan Syarat & Ketentuan.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp)
                 )
             }
-            // Tampilkan error jika belum dicentang saat klik Daftar
             if (privacyError != null) {
                 Text(
                     text = privacyError,
@@ -415,25 +438,45 @@ private fun RegisterFields(
 
 @Composable
 private fun DividerWithText(text: String) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-        Divider(modifier = Modifier.weight(1f))
-        Text(text, style = MaterialTheme.typography.labelMedium, color = TextSecondary, modifier = Modifier.padding(horizontal = 16.dp))
-        Divider(modifier = Modifier.weight(1f))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = TextSecondary,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
 @Composable
 private fun SocialLoginButton(text: String, iconRes: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    OutlinedButton(onClick = onClick, modifier = modifier.height(52.dp), shape = RoundedCornerShape(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-            Image(painterResource(id = iconRes), contentDescription = null, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text, style = MaterialTheme.typography.labelLarge)
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.height(52.dp),
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Image(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }
 
-// --- KOMPONEN BARU: PasswordStrengthBar ---
 @Composable
 fun PasswordStrengthBar(strength: PasswordStrength) {
     val animatedProgress by animateFloatAsState(targetValue = strength.progress, label = "strength")
@@ -451,7 +494,6 @@ fun PasswordStrengthBar(strength: PasswordStrength) {
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
-        // Progress Bar Kustom
         LinearProgressIndicator(
             progress = { animatedProgress },
             modifier = Modifier
@@ -462,7 +504,6 @@ fun PasswordStrengthBar(strength: PasswordStrength) {
             trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
 
-        // Tips kecil (Opsional)
         if (strength == PasswordStrength.WEAK) {
             Text(
                 text = "Gunakan kombinasi huruf besar, angka, dan simbol.",

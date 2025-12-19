@@ -41,7 +41,7 @@ object PdfGenerator {
         paint.color = primaryColor
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         paint.textSize = 24f
-        canvas.drawText("KLINIK SEHAT BERSAMA", 40f, 60f, paint)
+        canvas.drawText("KLINIQ", 40f, 60f, paint)
 
         paint.color = blackColor
         paint.typeface = Typeface.DEFAULT
@@ -59,7 +59,7 @@ object PdfGenerator {
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         paint.textSize = 18f
         paint.textAlign = Paint.Align.CENTER
-        canvas.drawText("RESUME MEDIS & RESEP", 595f / 2, 160f, paint)
+        canvas.drawText("Electronic Medical Record", 595f / 2, 160f, paint)
 
         // 4. INFO PASIEN (Kiri) & DOKTER (Kanan)
         paint.textAlign = Paint.Align.LEFT

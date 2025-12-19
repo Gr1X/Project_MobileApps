@@ -15,6 +15,6 @@ package com.example.project_mobileapps.data.model
  * @property totalPatients Jumlah total pasien yang berstatus 'SELESAI' pada periode tersebut.
  */
 data class DailyReport(
-    val day: String,
-    val totalPatients: Int
+    val label: String, // Label sumbu X (Sen, Sel, Jan, Feb)
+    val count: Int     // Nilai sumbu Y (Jumlah pasien)
 )

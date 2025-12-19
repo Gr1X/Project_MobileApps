@@ -13,46 +13,27 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 /**
- * Merepresentasikan state UI untuk layar [AddManualQueueScreen].
- * Menggabungkan state untuk pencarian, hasil pencarian, form pendaftaran, dan validasi error.
- *
- * @property searchQuery Teks yang sedang diketik pengguna di kolom pencarian.
- * @property searchResults Daftar pengguna ([User]) yang cocok dengan [searchQuery].
- * @property isSearching True jika proses pencarian sedang berlangsung.
- * @property selectedUser Pengguna yang dipilih dari [searchResults]. Jika non-null, UI akan menampilkan info pasien ini.
- * @property newPatientName State untuk input nama pada form pasien baru.
- * @property newPatientEmail State untuk input email pada form pasien baru.
- * @property newPatientPhone State untuk input nomor telepon pada form pasien baru.
- * @property newPatientGender State untuk input jenis kelamin pada form pasien baru.
- * @property newPatientDob State untuk input tanggal lahir pada form pasien baru.
- * @property nameError Pesan error validasi untuk nama.
- * @property emailError Pesan error validasi untuk email.
- * @property phoneError Pesan error validasi untuk nomor telepon.
+ * State UI Lengkap
  */
 data class AddManualQueueUiState(
     val searchQuery: String = "",
     val searchResults: List<User> = emptyList(),
     val isSearching: Boolean = false,
     val selectedUser: User? = null,
-    // Form state
+
+    // --- Walk-in / New Patient Form State ---
     val newPatientName: String = "",
     val newPatientEmail: String = "",
     val newPatientPhone: String = "",
     val newPatientGender: Gender = Gender.PRIA,
     val newPatientDob: String = "",
+
     // Validation state
     val nameError: String? = null,
-    val emailError: String? = null,
     val phoneError: String? = null
+    // Email error dihapus karena tidak wajib
 )
 
-/**
- * ViewModel untuk [AddManualQueueScreen]. Mengelola logika untuk mencari pasien yang sudah ada
- * atau mendaftarkan pasien baru, kemudian menambahkan mereka ke antrian.
- *
- * @param authRepository Repository untuk otentikasi, pencarian, dan pendaftaran pengguna.
- * @param queueRepository Repository untuk menambahkan entri antrian baru.
- */
 class AddManualQueueViewModel(
     private val authRepository: AuthRepository,
     private val queueRepository: QueueRepository
@@ -61,14 +42,16 @@ class AddManualQueueViewModel(
     private val _uiState = MutableStateFlow(AddManualQueueUiState())
     val uiState: StateFlow<AddManualQueueUiState> = _uiState.asStateFlow()
 
+    // --- State Handlers ---
     fun onNewPatientNameChange(name: String) {
         _uiState.update { it.copy(newPatientName = name, nameError = null) }
     }
     fun onNewPatientEmailChange(email: String) {
-        _uiState.update { it.copy(newPatientEmail = email, emailError = null) }
+        _uiState.update { it.copy(newPatientEmail = email) }
     }
     fun onNewPatientPhoneChange(phone: String) {
-        if (phone.all { it.isDigit() }) {
+        // Izinkan angka, spasi, atau tanda tambah (untuk +62)
+        if (phone.all { it.isDigit() || it == '+' || it == ' ' }) {
             _uiState.update { it.copy(newPatientPhone = phone, phoneError = null) }
         }
     }
@@ -79,12 +62,6 @@ class AddManualQueueViewModel(
         _uiState.update { it.copy(newPatientDob = dob) }
     }
 
-    /**
-     * Dipanggil setiap kali teks di kolom pencarian berubah.
-     * Memulai proses pencarian pengguna secara asynchronous.
-     *
-     * @param query Teks pencarian baru.
-     */
     fun onSearchQueryChange(query: String) {
         _uiState.update { it.copy(searchQuery = query, isSearching = true, selectedUser = null) }
         if (query.isBlank()) {
@@ -96,83 +73,56 @@ class AddManualQueueViewModel(
             _uiState.update { it.copy(searchResults = results, isSearching = false) }
         }
     }
-    /**
-     * Dipanggil ketika admin memilih seorang pengguna dari hasil pencarian.
-     * Mengunci UI pada info pasien yang dipilih.
-     *
-     * @param user Pengguna yang dipilih.
-     */
     fun onUserSelected(user: User) {
         _uiState.update { it.copy(selectedUser = user, searchQuery = user.name, searchResults = emptyList()) }
     }
 
-    /**
-     * Membersihkan semua state dan mengembalikan UI ke kondisi awal.
-     * Dipanggil saat admin membatalkan pilihan pasien.
-     */
     fun clearSelection() {
         _uiState.update { AddManualQueueUiState() }
     }
 
-    /**
-     * Menambahkan antrian untuk pengguna yang sudah dipilih.
-     *
-     * @param complaint Keluhan awal pasien.
-     * @param onResult Callback untuk memberitahu UI hasil dari operasi (sukses/gagal).
-     */
+    // --- Aksi 1: Pasien Ditemukan (Existing User) ---
     fun addQueueForSelectedUser(complaint: String, onResult: (Result<QueueItem>) -> Unit) {
         viewModelScope.launch {
             val user = _uiState.value.selectedUser ?: return@launch
-            val result = queueRepository.addManualQueue(user.name, complaint)
+            val result = queueRepository.addQueueByUserId(user.uid, user.name, complaint)
             onResult(result)
         }
     }
 
-    /**
-     * Melakukan validasi, mendaftarkan pasien baru, dan kemudian menambahkannya ke antrian.
-     *
-     * @param complaint Keluhan awal pasien.
-     * @param onResult Callback untuk memberitahu UI hasil dari operasi (sukses/gagal).
-     */
-    fun registerNewPatientAndAddQueue(complaint: String, onResult: (Result<QueueItem>) -> Unit) {
+    // --- Aksi 2: Pasien Baru / Walk-in (Ghost Account) ---
+    fun addQueueForNewPatient(complaint: String, onResult: (Result<QueueItem>) -> Unit) {
         viewModelScope.launch {
             val state = _uiState.value
             val name = state.newPatientName.trim()
-            val email = state.newPatientEmail.trim()
             val phone = state.newPatientPhone.trim()
+            val gender = state.newPatientGender.name
+            val dob = state.newPatientDob
 
-            val isNameValid = name.isNotBlank()
-            val isEmailValid = Patterns.EMAIL_ADDRESS.matcher(email).matches()
-            val isPhoneValid = phone.isNotBlank()
-
-            if (!isNameValid || !isEmailValid || !isPhoneValid) {
-                _uiState.update {
-                    it.copy(
-                        nameError = if (!isNameValid) "Nama wajib diisi" else null,
-                        emailError = if (!isEmailValid) "Format email tidak valid" else null,
-                        phoneError = if (!isPhoneValid) "Nomor telepon wajib diisi" else null
-                    )
-                }
-                onResult(Result.failure(Exception("Data tidak valid.")))
+            // [PERBAIKAN] Hanya Validasi Nama & HP
+            // Email TIDAK divalidasi regex karena boleh kosong
+            if (name.isBlank() || phone.isBlank()) {
+                _uiState.update { it.copy(
+                    nameError = if (name.isBlank()) "Nama wajib diisi" else null,
+                    phoneError = if (phone.isBlank()) "Nomor telepon wajib diisi" else null
+                ) }
+                onResult(Result.failure(Exception("Nama dan Nomor HP wajib diisi.")))
                 return@launch
             }
 
-            val registerResult = authRepository.register(name, email, null, state.newPatientGender, state.newPatientDob, phone)
-            registerResult.fold(
-                onSuccess = { newPatientUser ->
-                    val queueResult = queueRepository.addManualQueue(newPatientUser.name, complaint)
-                    onResult(queueResult)
-                },
-                onFailure = { onResult(Result.failure(it)) }
+            // Panggil Repository (Pastikan Repo sudah support 5 parameter ini)
+            val result = queueRepository.addManualQueue(
+                patientName = name,
+                complaint = complaint,
+                phoneNumber = phone,
+                gender = gender,
+                dob = dob
             )
+            onResult(result)
         }
     }
 }
 
-/**
- * Factory untuk membuat instance [AddManualQueueViewModel].
- * Diperlukan karena ViewModel memiliki dependensi ganda.
- */
 class AddManualQueueViewModelFactory(
     private val authRepository: AuthRepository,
     private val queueRepository: QueueRepository

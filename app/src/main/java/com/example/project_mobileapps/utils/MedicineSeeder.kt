@@ -50,9 +50,7 @@ object MedicineSeeder {
                 val batch = firestore.batch()
                 initialMedicines.forEach { medicine ->
                     val docRef = collection.document()
-                    // Pastikan ID diset
-                    val dataWithId = medicine.copy(id = docRef.id)
-                    batch.set(docRef, dataWithId)
+                    batch.set(docRef, medicine) // <--- GUNAKAN 'medicine' LANGSUNG
                 }
 
                 batch.commit().await()

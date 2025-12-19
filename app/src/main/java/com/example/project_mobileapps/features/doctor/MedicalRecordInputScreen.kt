@@ -1,5 +1,6 @@
 package com.example.project_mobileapps.features.doctor
 
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +44,18 @@ fun MedicalRecordInputScreen(
         factory = MedicalRecordViewModelFactory(FirestoreQueueRepository)
     )
 ) {
+    // START DEBUG CHECK
+    LaunchedEffect(Unit) {
+        if (queueId.isBlank()) {
+            // Jika ID kosong, tampilkan error dan kembalikan.
+            Log.e("MedRecordInput", "FATAL CRASH: queueId is blank or empty!")
+            ToastManager.showToast("Kesalahan data: ID antrian tidak ditemukan.", ToastType.ERROR)
+            onNavigateBack() // Kembali agar tidak crash
+        } else {
+            Log.d("MedRecordInput", "Queue ID yang diterima: $queueId")
+        }
+    }
+
     // Ambil UI State dari ViewModel Baru
     val uiState by viewModel.uiState.collectAsState()
 

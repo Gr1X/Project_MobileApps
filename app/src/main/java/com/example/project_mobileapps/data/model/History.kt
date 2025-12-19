@@ -18,8 +18,8 @@ data class HistoryItem(
     val visitDate: String,
     val initialComplaint: String,
     val status: QueueStatus,
-    val diagnosis: String = "",
-    val treatment: String = "",
-    val prescription: String = "",
-    val doctorNotes: String = ""
+    val diagnosis: String = "",      // <-- Tambahkan default ini
+    val treatment: String = "",      // <-- Tambahkan default ini
+    val prescription: String = "",   // <-- Tambahkan default ini
+    val doctorNotes: String = ""     // <-- Tambahkan default ini
 )

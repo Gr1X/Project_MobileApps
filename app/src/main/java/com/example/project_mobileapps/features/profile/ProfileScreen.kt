@@ -214,8 +214,6 @@ fun ProfileScreen(
                         ) {
                             Column {
                                 ProfileOptionItem(icon = Icons.Outlined.History, text = "Riwayat Kunjungan", onClick = onNavigateToHistory)
-                                Divider(modifier = Modifier.padding(horizontal = 16.dp))
-                                ProfileOptionItem(icon = Icons.Outlined.Settings, text = "Pengaturan", onClick = { /* TODO */ })
                             }
                         }
 

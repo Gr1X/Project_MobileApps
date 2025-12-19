@@ -115,11 +115,6 @@ fun SmartMealPlanScreen(
     }
 }
 
-// --- RESULT SECTION (UI HASIL PREDIKSI) ---
-// File: features/patient/mealplan/SmartMealPlanScreen.kt
-
-// ... imports
-
 @Composable
 fun ResultSection(
     result: MealPlanResponse,

@@ -8,67 +8,92 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.project_mobileapps.R
 
-// 1. Definisikan keluarga font Poppins dengan semua varian ketebalan yang Anda punya
-/**
- * Mendefinisikan [FontFamily] kustom menggunakan file font Poppins dari `res/font`.
- * Ini mengelompokkan semua varian ketebalan font Poppins ke dalam satu keluarga.
- */
+// ==============================================================================
+// 1. DEFINISI KELUARGA FONT (POPPINS)
+// ==============================================================================
 val PoppinsFamily = FontFamily(
-    Font(R.font.poppins_thin, FontWeight.Thin),
-    Font(R.font.poppins_extralight, FontWeight.ExtraLight),
     Font(R.font.poppins_light, FontWeight.Light),
     Font(R.font.poppins_regular, FontWeight.Normal),
     Font(R.font.poppins_medium, FontWeight.Medium),
     Font(R.font.poppins_semibold, FontWeight.SemiBold),
-    Font(R.font.poppins_bold, FontWeight.Bold),
-    Font(R.font.poppins_extrabold, FontWeight.ExtraBold),
-    Font(R.font.poppins_black, FontWeight.Black)
+    Font(R.font.poppins_bold, FontWeight.Bold)
 )
 
-// 2. Buat "Skala Tipografi" yang lengkap menggunakan font Poppins
-/**
- * Mendefinisikan skala tipografi kustom untuk aplikasi menggunakan [PoppinsFamily].
- * Objek [Typography] ini akan di-pass ke [MaterialTheme] di `Theme.kt`.
- * Setiap [TextStyle] mendefinisikan `fontFamily`, `fontWeight`, `fontSize`, `lineHeight`, dll.
- * Nama-nama properti (misal: `headlineLarge`, `bodyMedium`) mengikuti skala tipe Material Design 3.
- */
-val Typography = Typography(
-    // Judul Paling Besar (misal: "Jadwal Praktik" di header)
+// ==============================================================================
+// 2. SKALA TIPOGRAFI MATERIAL 3 (INDUSTRY STANDARD)
+// ==============================================================================
+val AppTypography = Typography(
+
+    // --- DISPLAY: Untuk teks raksasa (Contoh: Nomor Antrian "A-001") ---
+    displayLarge = TextStyle(
+        fontFamily = PoppinsFamily,
+        fontWeight = FontWeight.Bold, // Poppins butuh Bold di ukuran besar agar solid
+        fontSize = 57.sp,
+        lineHeight = 64.sp,
+        letterSpacing = (-0.25).sp
+    ),
+    displayMedium = TextStyle(
+        fontFamily = PoppinsFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 45.sp,
+        lineHeight = 52.sp,
+        letterSpacing = 0.sp
+    ),
+    displaySmall = TextStyle(
+        fontFamily = PoppinsFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 36.sp,
+        lineHeight = 44.sp,
+        letterSpacing = 0.sp
+    ),
+
+    // --- HEADLINE: Untuk Judul Halaman Utama (Contoh: "Halo, Budi!") ---
     headlineLarge = TextStyle(
         fontFamily = PoppinsFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 32.sp,
-        lineHeight = 40.sp
+        lineHeight = 40.sp,
+        letterSpacing = 0.sp
     ),
-    // Judul Sedang (misal: Sapaan "Hello, Budi Santoso")
     headlineMedium = TextStyle(
         fontFamily = PoppinsFamily,
-        fontWeight = FontWeight.Bold,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 28.sp,
-        lineHeight = 36.sp
+        lineHeight = 36.sp,
+        letterSpacing = 0.sp
     ),
-    // Judul Kartu Utama (misal: "Dr. Budi Santoso")
+    headlineSmall = TextStyle(
+        fontFamily = PoppinsFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 24.sp,
+        lineHeight = 32.sp,
+        letterSpacing = 0.sp
+    ),
+
+    // --- TITLE: Untuk Header Section / Kartu (Contoh: "Jadwal Dokter", "Poli Gigi") ---
     titleLarge = TextStyle(
         fontFamily = PoppinsFamily,
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = FontWeight.SemiBold, // SemiBold agar memisah dari Body
         fontSize = 22.sp,
-        lineHeight = 28.sp
+        lineHeight = 28.sp,
+        letterSpacing = 0.sp
     ),
-    // Judul Sedang (misal: "Pantauan Antrian")
     titleMedium = TextStyle(
         fontFamily = PoppinsFamily,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 18.sp,
-        lineHeight = 24.sp
+        fontWeight = FontWeight.Medium, // Medium cukup untuk sub-header
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.15.sp
     ),
-    // Judul Kecil (misal: di dalam list item)
     titleSmall = TextStyle(
         fontFamily = PoppinsFamily,
         fontWeight = FontWeight.Medium,
-        fontSize = 16.sp,
-        lineHeight = 20.sp
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.1.sp
     ),
-    // Teks Isi/Body Utama
+
+    // --- BODY: Untuk Paragraf / Isi Teks (Contoh: Deskripsi Berita, Alamat) ---
     bodyLarge = TextStyle(
         fontFamily = PoppinsFamily,
         fontWeight = FontWeight.Normal,
@@ -76,7 +101,6 @@ val Typography = Typography(
         lineHeight = 24.sp,
         letterSpacing = 0.5.sp
     ),
-    // Teks Isi/Body Sedang
     bodyMedium = TextStyle(
         fontFamily = PoppinsFamily,
         fontWeight = FontWeight.Normal,
@@ -84,19 +108,33 @@ val Typography = Typography(
         lineHeight = 20.sp,
         letterSpacing = 0.25.sp
     ),
-    // Teks Label (misal: untuk tombol atau input field)
+    bodySmall = TextStyle(
+        fontFamily = PoppinsFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.4.sp // Sedikit renggang agar terbaca di ukuran kecil
+    ),
+
+    // --- LABEL: Untuk Komponen UI (Button, Chip, Tag, Caption Kecil) ---
     labelLarge = TextStyle(
         fontFamily = PoppinsFamily,
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = FontWeight.SemiBold, // Button text harus tegas
         fontSize = 14.sp,
         lineHeight = 20.sp,
         letterSpacing = 0.1.sp
     ),
-    // Teks Label Kecil (misal: sub-judul "Antrian di Depan")
     labelMedium = TextStyle(
         fontFamily = PoppinsFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.5.sp
+    ),
+    labelSmall = TextStyle(
+        fontFamily = PoppinsFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 11.sp, // Ukuran paling kecil (Extra Small)
         lineHeight = 16.sp,
         letterSpacing = 0.5.sp
     )

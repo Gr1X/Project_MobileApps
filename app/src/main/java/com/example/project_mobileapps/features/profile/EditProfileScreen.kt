@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -144,12 +145,10 @@ fun EditProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Edit Profil", fontWeight = FontWeight.SemiBold) },
-                navigationIcon = { CircularBackButton(onClick = onNavigateBack) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                title = { Text("Edit Profile", fontWeight = FontWeight.SemiBold) },
+                navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali") } },
             )
-        },
-        containerColor = Color(0xFFF8FAFC) // Background Abu Modern
+        }
     ) { padding ->
         Column(
             modifier = Modifier

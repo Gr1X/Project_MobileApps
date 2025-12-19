@@ -11,9 +11,11 @@ import com.example.project_mobileapps.data.model.QueueItem
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.data.repo.DoctorRepository
+import com.example.project_mobileapps.data.repo.NewsRepository
 import com.example.project_mobileapps.data.repo.QueueRepository
 import com.example.project_mobileapps.data.repo.NotificationRepository // Pastikan ada repository ini
 import com.example.project_mobileapps.di.AppContainer
+import com.example.project_mobileapps.features.patient.news.NewsArticleUI
 import com.example.project_mobileapps.utils.NotificationHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,7 +36,8 @@ data class HomeUiState(
     val currentlyServingPatient: QueueItem? = null,
     val upcomingQueue: List<QueueItem> = emptyList(),
     val availableSlots: Int = 0,
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val topNews: List<NewsArticleUI> = emptyList()
 )
 
 class HomeViewModel(
@@ -47,6 +50,7 @@ class HomeViewModel(
     private val context = getApplication<Application>().applicationContext
     private val clinicId = AppContainer.CLINIC_ID
     private val _uiState = MutableStateFlow(HomeUiState())
+    private val newsRepository = NewsRepository()
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     // Variabel State untuk Mencegah Spam Notifikasi
@@ -87,8 +91,19 @@ class HomeViewModel(
                     it.queueNumber == practiceStatus?.currentServingNumber && it.status == QueueStatus.DILAYANI
                 }
 
+                val newsFromApi = newsRepository.getHealthNews().take(3).map { apiArticle ->
+                    // Lakukan mapping yang sama seperti di NewsViewModel
+                    NewsArticleUI(
+                        title = apiArticle.title ?: "Tanpa Judul",
+                        source = apiArticle.source?.name ?: "N/A",
+                        imageUrl = apiArticle.urlToImage,
+                        articleUrl = apiArticle.url
+                    )
+                }
+
                 _uiState.update {
                     it.copy(
+                        topNews = newsFromApi,
                         greeting = getGreetingBasedOnTime(),
                         userName = user?.username?.ifBlank { user.name } ?: "Pengguna",
                         doctor = doctorRepository.getTheOnlyDoctor(),

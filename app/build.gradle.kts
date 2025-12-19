@@ -80,12 +80,15 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("com.google.android.gms:play-services-auth:20.7.0")
     implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.android.gms:play-services-auth:20.7.0")
+    implementation("androidx.compose.material3:material3:1.2.0")
     implementation(libs.androidx.compose.material.icons.extended)
 
     // Networking Libraries
     implementation(libs.retrofit.core)
     implementation(libs.retrofit.converter.moshi)
     implementation(libs.moshi.kotlin)
+    implementation(libs.rendering)
 
     // TAMBAHKAN BARIS INI
     testImplementation(libs.junit)

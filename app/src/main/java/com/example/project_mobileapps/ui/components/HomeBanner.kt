@@ -168,34 +168,6 @@ fun BannerCardItem(banner: BannerModel, modifier: Modifier = Modifier) {
                     maxLines = 2,
                     lineHeight = 18.sp
                 )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Tombol "Lihat Detail"
-                Surface(
-                    color = MaterialTheme.colorScheme.primary, // Warna tombol aksen
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.height(28.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Lihat Detail",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            Icons.Default.ArrowForward,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(12.dp)
-                        )
-                    }
-                }
             }
         }
     }

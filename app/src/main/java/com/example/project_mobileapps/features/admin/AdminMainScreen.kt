@@ -3,8 +3,8 @@ package com.example.project_mobileapps.features.admin
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -37,6 +37,8 @@ import com.example.project_mobileapps.features.admin.reports.ReportViewModelFact
 import com.example.project_mobileapps.features.doctor.MedicalRecordInputScreen
 import com.example.project_mobileapps.features.doctor.MedicalRecordViewModel
 import com.example.project_mobileapps.features.doctor.MedicalRecordViewModelFactory
+import com.example.project_mobileapps.ui.components.AppDrawerContent
+import com.example.project_mobileapps.ui.components.NavigationItem
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,7 +53,16 @@ fun AdminMainScreen(
     val navBackStackEntry by adminNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Hide TopAppBar on detail/input screens
+    // --- DEFINISI MENU ADMIN ---
+    val adminMenuItems = listOf(
+        NavigationItem("Dashboard", Icons.Outlined.Dashboard, AdminMenu.Dashboard.route),
+        NavigationItem("Monitoring Antrian", Icons.Outlined.MonitorHeart, AdminMenu.Monitoring.route),
+        NavigationItem("Jadwal Dokter", Icons.Outlined.CalendarMonth, AdminMenu.Management.items[0].route),
+        NavigationItem("Laporan & Pasien", Icons.Outlined.Assessment, AdminMenu.Management.items[1].route),
+        NavigationItem("Manajemen Obat", Icons.Outlined.Medication, "manage_medicine")
+    )
+
+    // Logic menyembunyikan TopBar untuk screen tertentu
     val showMainAppBar = currentRoute != "add_manual_queue" &&
             (currentRoute?.startsWith("patient_history_detail") == false) &&
             (currentRoute?.startsWith("medical_record_input") == false) &&
@@ -61,8 +72,8 @@ fun AdminMainScreen(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            AdminDrawerContent(
-                currentRoute = currentRoute,
+            AppDrawerContent(
+                currentRoute = currentRoute ?: AdminMenu.Dashboard.route,
                 onNavigate = { route ->
                     adminNavController.navigate(route) {
                         popUpTo(adminNavController.graph.startDestinationId)
@@ -70,7 +81,10 @@ fun AdminMainScreen(
                     }
                     scope.launch { drawerState.close() }
                 },
-                onLogoutClick = onLogoutClick
+                onLogout = onLogoutClick,
+                menuItems = adminMenuItems,
+                userName = "Admin Klinik",
+                userRole = "Administrator"
             )
         }
     ) {
@@ -78,7 +92,7 @@ fun AdminMainScreen(
             topBar = {
                 if (showMainAppBar) {
                     TopAppBar(
-                        title = {},
+                        title = { /* Kosongkan */ },
                         navigationIcon = {
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                 Icon(Icons.Default.Menu, contentDescription = "Menu")
@@ -87,14 +101,7 @@ fun AdminMainScreen(
                     )
                 }
             },
-            floatingActionButton = {
-                // Tombol Tambah Manual (Hanya di halaman Monitoring)
-                if (currentRoute == AdminMenu.Monitoring.route) {
-                    FloatingActionButton(onClick = { adminNavController.navigate("add_manual_queue") }) {
-                        Icon(Icons.Default.Add, "Tambah Manual")
-                    }
-                }
-            }
+            floatingActionButton = {}
         ) { innerPadding ->
             NavHost(
                 navController = adminNavController,
@@ -103,7 +110,6 @@ fun AdminMainScreen(
             ) {
                 // 1. DASHBOARD
                 composable(AdminMenu.Dashboard.route) {
-                    // Navigasi dari Dashboard ke Menu Lain
                     AdminDashboardScreen(
                         onNavigateToSchedule = { adminNavController.navigate(AdminMenu.Management.items[0].route) },
                         onNavigateToMonitoring = { adminNavController.navigate(AdminMenu.Monitoring.route) },
@@ -127,16 +133,50 @@ fun AdminMainScreen(
                         onNavigateToHistory = { patientId ->
                             adminNavController.navigate("patient_history_detail/$patientId")
                         },
-                        // [FIX] Update navigasi dengan 4 parameter (userId)
                         onNavigateToMedicalRecord = { qId, name, num, userId ->
                             adminNavController.navigate("medical_record_input/$qId/$name/$num/$userId")
+                        },
+                        // [PERBAIKAN UTAMA DI SINI]
+                        // Menambahkan callback navigasi ke manual input
+                        onNavigateToManualInput = {
+                            adminNavController.navigate("add_manual_queue")
                         }
                     )
                 }
 
-                // 3. INPUT REKAM MEDIS
+                // 3. MANAJEMEN JADWAL
+                composable(AdminMenu.Management.items[0].route) {
+                    val practiceViewModel: ManagePracticeScheduleViewModel = viewModel(
+                        factory = ManagePracticeScheduleViewModelFactory(AppContainer.queueRepository)
+                    )
+                    ManagePracticeScheduleScreen(viewModel = practiceViewModel)
+                }
+
+                // 4. LAPORAN & DATA PASIEN
+                composable(AdminMenu.Management.items[1].route) {
+                    val reportViewModel: ReportViewModel = viewModel(
+                        factory = ReportViewModelFactory(AppContainer.queueRepository, AuthRepository)
+                    )
+                    ReportScreen(
+                        viewModel = reportViewModel,
+                        onPatientClick = { patientId ->
+                            adminNavController.navigate("patient_history_detail/$patientId")
+                        }
+                    )
+                }
+
+                // 5. MANAJEMEN OBAT
+                composable("manage_medicine") {
+                    ManageMedicineScreen(
+                        // [PERBAIKAN] Gunakan parameter baru 'onOpenDrawer'
+                        onOpenDrawer = {
+                            scope.launch { drawerState.open() }
+                        }
+                    )
+                }
+
+                // 6. INPUT REKAM MEDIS
                 composable(
-                    // [FIX] Route dengan userId
                     route = "medical_record_input/{qId}/{name}/{num}/{userId}",
                     arguments = listOf(
                         navArgument("qId") { type = NavType.StringType },
@@ -150,7 +190,6 @@ fun AdminMainScreen(
                     val num = backStackEntry.arguments?.getString("num") ?: ""
                     val userId = backStackEntry.arguments?.getString("userId") ?: ""
 
-                    // [FIX] Gunakan MedicalRecordViewModel (bukan AdminQueueMonitor)
                     val medRecordVM: MedicalRecordViewModel = viewModel(
                         factory = MedicalRecordViewModelFactory(AppContainer.queueRepository)
                     )
@@ -159,51 +198,28 @@ fun AdminMainScreen(
                         queueId = qId,
                         patientName = name,
                         queueNumber = num,
-                        patientId = userId, // [FIX] Pass patientId untuk load history
+                        patientId = userId,
                         viewModel = medRecordVM,
                         onNavigateBack = { adminNavController.popBackStack() },
                         onRecordSaved = {
-                            // Kembali ke Monitoring setelah simpan
                             adminNavController.popBackStack(AdminMenu.Monitoring.route, false)
                         }
                     )
                 }
 
-                // 4. MANAJEMEN JADWAL
-                composable(AdminMenu.Management.items[0].route) {
-                    val practiceViewModel: ManagePracticeScheduleViewModel = viewModel(
-                        factory = ManagePracticeScheduleViewModelFactory(AppContainer.queueRepository)
-                    )
-                    ManagePracticeScheduleScreen(viewModel = practiceViewModel)
-                }
-
-                // 5. LAPORAN & DATA PASIEN
-                composable(AdminMenu.Management.items[1].route) {
-                    val reportViewModel: ReportViewModel = viewModel(
-                        factory = ReportViewModelFactory(AppContainer.queueRepository, AuthRepository)
-                    )
-                    ReportScreen(
-                        viewModel = reportViewModel,
-                        onPatientClick = { patientId ->
-                            adminNavController.navigate("patient_history_detail/$patientId")
-                        }
-                    )
-                }
-
-                // 6. TAMBAH ANTRIAN MANUAL
+                // 7. TAMBAH ANTRIAN MANUAL (Route Tujuan)
                 composable("add_manual_queue") {
                     AddManualQueueScreen(
                         onNavigateBack = { adminNavController.popBackStack() }
                     )
                 }
 
-                // 7. DETAIL HISTORY LIST (Riwayat Kunjungan)
+                // 8. DETAIL HISTORY LIST
                 composable(
                     route = "patient_history_detail/{patientId}",
                     arguments = listOf(navArgument("patientId") { type = NavType.StringType })
                 ) { backStackEntry ->
                     val patientId = backStackEntry.arguments?.getString("patientId") ?: ""
-
                     val detailViewModel: PatientHistoryDetailViewModel = viewModel(
                         factory = PatientHistoryDetailViewModelFactory(
                             AppContainer.queueRepository,
@@ -211,7 +227,6 @@ fun AdminMainScreen(
                             patientId
                         )
                     )
-
                     PatientHistoryDetailScreen(
                         viewModel = detailViewModel,
                         onNavigateBack = { adminNavController.popBackStack() },
@@ -221,22 +236,14 @@ fun AdminMainScreen(
                     )
                 }
 
-                // 8. DETAIL EMR (Isi Lengkap)
+                // 9. DETAIL EMR
                 composable(
                     route = "medical_record_detail/{visitId}",
                     arguments = listOf(navArgument("visitId") { type = NavType.StringType })
                 ) { backStackEntry ->
                     val visitId = backStackEntry.arguments?.getString("visitId") ?: ""
-
                     MedicalRecordDetailScreen(
                         queueId = visitId,
-                        onNavigateBack = { adminNavController.popBackStack() }
-                    )
-                }
-
-                // 9. MANAJEMEN OBAT
-                composable("manage_medicine") {
-                    ManageMedicineScreen(
                         onNavigateBack = { adminNavController.popBackStack() }
                     )
                 }

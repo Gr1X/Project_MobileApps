@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
@@ -31,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
@@ -39,15 +41,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.project_mobileapps.data.model.PracticeStatus
 import com.example.project_mobileapps.data.model.QueueItem
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.repo.NotificationRepository
+import com.example.project_mobileapps.features.patient.news.NewsArticleUI
 import kotlinx.coroutines.delay
 import java.util.Date
 import java.util.concurrent.TimeUnit
 import com.example.project_mobileapps.ui.components.FeaturedDoctorCard
 import com.example.project_mobileapps.ui.components.HomeBanner
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+import com.example.project_mobileapps.R
 
 /**
  * Data class internal untuk merepresentasikan item pada [ActionButtonsRow].
@@ -76,7 +83,8 @@ fun HomeScreen(
     onNavigateToQueue: () -> Unit,
     onProfileClick: () -> Unit,
     onTakeQueueClick: () -> Unit,
-    onNewsClick: () -> Unit,
+    onNewsItemClick: (String) -> Unit, // Untuk klik kartu berita (butuh URL)
+    onSeeAllNewsClick: () -> Unit,     // Untuk klik "Lihat Semua"
     onSmartMealPlanClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -227,9 +235,13 @@ fun HomeScreen(
             // 3. QUICK ACTIONS (iOS Style Grid)
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 Text(
-                    "Quick Actions", // Label asli
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = Color.Black
+                    text = "Health Updates",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        letterSpacing = (-0.5).sp
+                    ),
+                    color = Color(0xFF1A1C24)
                 )
 
                 Spacer(Modifier.height(10.dp))
@@ -249,7 +261,7 @@ fun HomeScreen(
 
                         when (normalizedLabel) {
                             "Booking" -> onNavigateToQueue()
-                            "News" -> onNewsClick()
+                            "News" -> onSeeAllNewsClick()
                             "Smart Meal Plan" -> onSmartMealPlanClick()
                             else -> Toast.makeText(context, "$normalizedLabel diklik!", Toast.LENGTH_SHORT).show()
                         }
@@ -264,10 +276,16 @@ fun HomeScreen(
                     modifier = Modifier.padding(horizontal = 20.dp)
                 ){
                     Text(
-                        "Appointments ", // Label asli
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color.Black
+                        text = "Appointment ",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            letterSpacing = (-0.5).sp
+                        ),
+                        color = Color(0xFF1A1C24)
                     )
+
+                    Spacer(Modifier.height(10.dp))
 
                     FeaturedDoctorCard(
                         doctor = uiState.doctor,
@@ -277,6 +295,18 @@ fun HomeScreen(
                         onTakeQueueClick = onTakeQueueClick
                     )
                 }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // [START: NEWS SECTION]
+            if (uiState.topNews.isNotEmpty()) {
+                NewsSection(
+                    articles = uiState.topNews,
+                    onNewsClick = onNewsItemClick,      // Mengirim (String) -> Unit
+                    onViewMoreClick = onSeeAllNewsClick // Mengirim () -> Unit
+                )
+                Spacer(Modifier.height(16.dp))
             }
         }
     }
@@ -320,6 +350,151 @@ fun QueueStatusCard(queue: QueueItem, onClick: () -> Unit) {
         }
     }
 }
+
+// ==========================================================
+// FINAL POLISHED UI: NewsSection
+// ==========================================================
+@Composable
+fun NewsSection(
+    articles: List<NewsArticleUI>,
+    onNewsClick: (encodedUrl: String) -> Unit,
+    onViewMoreClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+    ) {
+        // --- Header Section (DIRAPIKAN) ---
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            // Pastikan elemen kiri & kanan mentok ke ujung
+            horizontalArrangement = Arrangement.SpaceBetween,
+            // [KUNCI] Pastikan teks sejajar tengah secara vertikal
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Health Updates",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    letterSpacing = (-0.5).sp
+                ),
+                color = Color(0xFF1A1C24)
+            )
+
+            // Menggunakan TextButton agar area sentuh pas & alignment otomatis rapi
+            TextButton(
+                onClick = onViewMoreClick,
+                // Mengurangi padding bawaan agar teks rapat ke kanan
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                modifier = Modifier.height(32.dp) // Tinggi fix agar tidak loncat
+            ) {
+                Text(
+                    text = "Lihat Semua",
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp)) // Jarak header ke list dikurangi sedikit agar menyatu
+
+        // --- List Artikel ---
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            articles.take(3).forEach { article ->
+                NewsHomeItem(article = article, onClick = {
+                    article.articleUrl?.let { url ->
+                        val encodedUrl = URLEncoder.encode(url, StandardCharsets.UTF_8.toString())
+                        onNewsClick(encodedUrl)
+                    }
+                })
+            }
+        }
+    }
+}
+
+// ==========================================================
+// UI IMPROVEMENT: NewsHomeItem (Card Style)
+// ==========================================================
+@Composable
+fun NewsHomeItem(article: NewsArticleUI, onClick: () -> Unit) {
+    // Container Kartu dengan Shadow Halus
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(110.dp) // Tinggi sedikit ditambah agar elemen tidak sesak
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp), // Sudut membulat modern
+        colors = CardDefaults.cardColors(containerColor = Color.White), // Background PUTIH BERSIH
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp), // Shadow agar kartu "pop-out"
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // --- 1. Gambar (Full Height di Kiri) ---
+            AsyncImage(
+                model = article.imageUrl,
+                contentDescription = article.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .width(110.dp) // Lebar gambar = Tinggi kartu (Jadi Kotak)
+                    .fillMaxHeight(),
+                placeholder = painterResource(id = R.drawable.background3), // Pastikan resource ini ada
+                error = painterResource(id = R.drawable.background3)
+            )
+
+            // --- 2. Konten Teks (Di Kanan) ---
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(14.dp) // Padding dalam teks lebih lega
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Judul Berita
+                Text(
+                    text = article.title,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 20.sp, // Jarak antar baris teks
+                        fontSize = 16.sp
+                    ),
+                    color = Color(0xFF2D3436), // Abu Tua Premium
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                // Footer (Sumber Berita & Waktu/Icon)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Tag Sumber Berita
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f), // Background tag transparan
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = article.source.uppercase(),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                letterSpacing = 0.5.sp
+                            ),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 /**
  * Composable helper (private) untuk menata [ActionButton] dalam satu baris.
  * @param actions Daftar [ActionItem] yang akan ditampilkan.
