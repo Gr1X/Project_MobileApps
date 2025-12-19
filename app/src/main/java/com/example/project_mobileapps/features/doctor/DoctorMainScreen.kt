@@ -4,8 +4,7 @@ package com.example.project_mobileapps.features.doctor
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.MonitorHeart
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -22,11 +21,18 @@ import com.example.project_mobileapps.di.AppContainer
 import com.example.project_mobileapps.features.admin.manageSchedule.AdminQueueMonitorScreen
 import com.example.project_mobileapps.features.admin.manageSchedule.AdminQueueMonitorViewModel
 import com.example.project_mobileapps.features.admin.manageSchedule.AdminQueueMonitorViewModelFactory
+import com.example.project_mobileapps.features.admin.manageSchedule.ManagePracticeScheduleScreen
+import com.example.project_mobileapps.features.admin.manageSchedule.ManagePracticeScheduleViewModel
+import com.example.project_mobileapps.features.admin.manageSchedule.ManagePracticeScheduleViewModelFactory
 import com.example.project_mobileapps.features.admin.manualQueue.AddManualQueueScreen
+import com.example.project_mobileapps.features.admin.medicine.ManageMedicineScreen
+import com.example.project_mobileapps.features.admin.reports.MedicalRecordDetailScreen
 import com.example.project_mobileapps.features.admin.reports.PatientHistoryDetailScreen
 import com.example.project_mobileapps.features.admin.reports.PatientHistoryDetailViewModel
 import com.example.project_mobileapps.features.admin.reports.PatientHistoryDetailViewModelFactory
-import com.example.project_mobileapps.features.admin.reports.MedicalRecordDetailScreen
+import com.example.project_mobileapps.features.admin.reports.ReportScreen
+import com.example.project_mobileapps.features.admin.reports.ReportViewModel
+import com.example.project_mobileapps.features.admin.reports.ReportViewModelFactory
 import com.example.project_mobileapps.ui.components.AppDrawerContent
 import com.example.project_mobileapps.ui.components.NavigationItem
 import kotlinx.coroutines.launch
@@ -43,17 +49,22 @@ fun DoctorMainScreen(
     val navBackStackEntry by doctorNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Menu Dokter
+    // --- DEFINISI MENU DOKTER (DISAMAKAN DENGAN ADMIN) ---
     val doctorMenuItems = listOf(
         NavigationItem("Dashboard", Icons.Outlined.Dashboard, DoctorMenu.Dashboard.route),
-        NavigationItem("Antrian Pasien", Icons.Outlined.MonitorHeart, DoctorMenu.Queue.route)
+        NavigationItem("Antrian Pasien", Icons.Outlined.MonitorHeart, DoctorMenu.Queue.route),
+        // Menu Tambahan (Shared dengan Admin)
+        NavigationItem("Jadwal Dokter", Icons.Outlined.CalendarMonth, "manage_schedule"),
+        NavigationItem("Laporan & Pasien", Icons.Outlined.Assessment, "manage_reports"),
+        NavigationItem("Manajemen Obat", Icons.Outlined.Medication, "manage_medicine")
     )
 
     // Logic Sembunyikan TopBar
     val showMainAppBar = currentRoute != "add_manual_queue" &&
             (currentRoute?.startsWith("medical_record_input") == false) &&
             (currentRoute?.startsWith("patient_history_detail") == false) &&
-            (currentRoute?.startsWith("medical_record_detail") == false)
+            (currentRoute?.startsWith("medical_record_detail") == false) &&
+            (currentRoute?.startsWith("manage_medicine") == false) // TopBar obat beda sendiri
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -69,7 +80,7 @@ fun DoctorMainScreen(
                 },
                 onLogout = onLogoutClick,
                 menuItems = doctorMenuItems,
-                userName = "Dr. Budi Santoso", // Bisa diganti dynamic user name
+                userName = "Dr. Budi Santoso",
                 userRole = "Dokter Umum"
             )
         }
@@ -106,7 +117,7 @@ fun DoctorMainScreen(
                     )
                 }
 
-                // 2. MONITORING ANTRIAN (Shared Screen dengan Admin)
+                // 2. MONITORING ANTRIAN
                 composable(DoctorMenu.Queue.route) {
                     val user by AuthRepository.currentUser.collectAsState()
                     val monitorViewModel: AdminQueueMonitorViewModel = viewModel(
@@ -125,14 +136,43 @@ fun DoctorMainScreen(
                         onNavigateToMedicalRecord = { qId, name, num, userId ->
                             doctorNavController.navigate("medical_record_input/$qId/$name/$num/$userId")
                         },
-                        // [FIX ERROR DI SINI] Tambahkan parameter ini
                         onNavigateToManualInput = {
                             doctorNavController.navigate("add_manual_queue")
                         }
                     )
                 }
 
-                // 3. INPUT REKAM MEDIS
+                // 3. JADWAL DOKTER (Shared)
+                composable("manage_schedule") {
+                    val practiceViewModel: ManagePracticeScheduleViewModel = viewModel(
+                        factory = ManagePracticeScheduleViewModelFactory(AppContainer.queueRepository)
+                    )
+                    ManagePracticeScheduleScreen(viewModel = practiceViewModel)
+                }
+
+                // 4. LAPORAN & PASIEN (Shared)
+                composable("manage_reports") {
+                    val reportViewModel: ReportViewModel = viewModel(
+                        factory = ReportViewModelFactory(AppContainer.queueRepository, AuthRepository)
+                    )
+                    ReportScreen(
+                        viewModel = reportViewModel,
+                        onPatientClick = { patientId ->
+                            doctorNavController.navigate("patient_history_detail/$patientId")
+                        }
+                    )
+                }
+
+                // 5. MANAJEMEN OBAT (Shared)
+                composable("manage_medicine") {
+                    ManageMedicineScreen(
+                        onOpenDrawer = { scope.launch { drawerState.open() } }
+                    )
+                }
+
+                // --- SUB SCREENS ---
+
+                // 6. INPUT REKAM MEDIS
                 composable(
                     route = "medical_record_input/{qId}/{name}/{num}/{userId}",
                     arguments = listOf(
@@ -164,14 +204,14 @@ fun DoctorMainScreen(
                     )
                 }
 
-                // 4. [TAMBAHAN] HALAMAN MANUAL INPUT (Agar Dokter juga bisa input manual)
+                // 7. MANUAL INPUT
                 composable("add_manual_queue") {
                     AddManualQueueScreen(
                         onNavigateBack = { doctorNavController.popBackStack() }
                     )
                 }
 
-                // 5. DETAIL HISTORY LIST
+                // 8. DETAIL HISTORY LIST
                 composable(
                     route = "patient_history_detail/{patientId}",
                     arguments = listOf(navArgument("patientId") { type = NavType.StringType })
@@ -193,7 +233,7 @@ fun DoctorMainScreen(
                     )
                 }
 
-                // 6. DETAIL EMR LENGKAP
+                // 9. DETAIL EMR LENGKAP
                 composable(
                     route = "medical_record_detail/{visitId}",
                     arguments = listOf(navArgument("visitId") { type = NavType.StringType })
