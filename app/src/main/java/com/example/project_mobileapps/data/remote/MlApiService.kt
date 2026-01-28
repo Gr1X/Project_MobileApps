@@ -13,18 +13,20 @@ private val moshi = Moshi.Builder()
     .add(KotlinJsonAdapterFactory())
     .build()
 
+// PERBAIKAN DI SINI
 private val retrofitML = Retrofit.Builder()
-    .baseUrl("https://diabetesmealplanpredictionapi-production-96e7.up.railway.app/")
+    // 1. Gunakan URL root server (Hapus bagian /docs#...)
+    // 2. Wajib diakhiri dengan '/'
+    .baseUrl("https://diabetesmealplanpredictionapi.onrender.com/")
     .addConverterFactory(MoshiConverterFactory.create(moshi))
     .build()
 
 interface MlApiService {
-    // Endpoint sesuai dokumentasi Swagger: /predict (POST)
+    // Endpoint 'predict' akan disambung ke Base URL
     @POST("predict")
     suspend fun predictMealPlan(@Body request: MealPlanRequest): MealPlanResponse
 }
 
-// 4. Singleton Accessor
 object MlApiClient {
     val service: MlApiService by lazy {
         retrofitML.create(MlApiService::class.java)

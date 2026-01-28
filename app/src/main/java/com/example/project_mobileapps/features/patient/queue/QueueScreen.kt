@@ -1,3 +1,4 @@
+// File: features/patient/queue/QueueScreen.kt
 package com.example.project_mobileapps.features.patient.queue
 
 import androidx.compose.foundation.BorderStroke
@@ -27,7 +28,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.project_mobileapps.data.model.QueueStatus
 import com.example.project_mobileapps.data.repo.AuthRepository
 import com.example.project_mobileapps.di.AppContainer
-import com.example.project_mobileapps.ui.components.CircularBackButton
 import com.example.project_mobileapps.ui.components.ConfirmationBottomSheet
 import com.example.project_mobileapps.ui.components.QueueChip
 import com.example.project_mobileapps.ui.components.ToastManager
@@ -37,14 +37,7 @@ import com.example.project_mobileapps.utils.QrCodeGenerator
 import kotlinx.coroutines.delay
 import java.util.Date
 import java.util.concurrent.TimeUnit
-/**
- * Composable utama untuk layar Status Antrian Pasien.
- * Menampilkan [QueueUiState] dari [QueueViewModel].
- *
- * @param queueViewModel ViewModel [QueueViewModel] yang menyediakan state.
- * @param onBackToHome Callback untuk navigasi kembali ke layar Home.
- * @param onNavigateToTakeQueue Callback untuk navigasi ke layar ambil antrian (Detail Dokter).
- */
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QueueScreen(
@@ -64,19 +57,9 @@ fun QueueScreen(
         }
     }
 
-    // ✅ 1. State variable to hold the real-time timer value
+    // State variable to hold the real-time timer value (Estimasi menunggu)
     var displayedWaitTime by remember { mutableStateOf(uiState.estimatedWaitTime) }
 
-    // ✅ 2. Effect to run the timer
-    /**
-     * [LaunchedEffect] ini bertanggung jawab untuk timer hitung mundur.
-     * `key1 = uiState.estimatedWaitTime` berarti:
-     * 1. Jika `uiState.estimatedWaitTime` berubah (misal: dari 30 ke 25),
-     * efek ini akan Batal dan Dijalankan Ulang.
-     * 2. `displayedWaitTime` akan di-reset ke nilai baru (25).
-     * 3. Loop `while` akan mulai menghitung mundur dari 25, 24, 23, ...
-     * setiap 1 menit (`delay(60_000L)`).
-     */
     LaunchedEffect(key1 = uiState.estimatedWaitTime) {
         displayedWaitTime = uiState.estimatedWaitTime
         if (displayedWaitTime > 0) {
@@ -91,9 +74,7 @@ fun QueueScreen(
         ConfirmationBottomSheet(
             onDismiss = { showCancelSheet = false },
             onConfirm = {
-                // 1. Eksekusi Batal
                 queueViewModel.cancelMyQueue()
-                // 2. Feedback ke User
                 ToastManager.showToast("Permintaan pembatalan dikirim...", ToastType.INFO)
                 showCancelSheet = false
             },
@@ -142,15 +123,6 @@ fun QueueScreen(
     }
 }
 
-// --- PERBAIKAN UTAMA DI FUNGSI INI ---
-/**
- * Composable helper (private) untuk kartu informasi utama.
- * Tampilannya berubah-ubah berdasarkan status antrian pasien.
- *
- * @param uiState State UI saat ini.
- * @param onTakeQueue Aksi jika tombol "Ambil Antrian" diklik.
- * @param onCancelQueue Aksi jika tombol "Batalkan" diklik.
- */
 @Composable
 private fun QueueInfoCard(
     uiState: QueueUiState,
@@ -236,8 +208,12 @@ private fun QueueInfoCard(
                 }
                 QueueStatus.DIPANGGIL -> {
                     val calledAt = uiState.myQueueItem?.calledAt
+                    // [PERBAIKAN] Ambil limit dari practiceStatus, default ke 15 jika null/0
+                    val limitMinutes = uiState.practiceStatus?.patientCallTimeLimitMinutes ?: 15
+                    val safeLimit = if (limitMinutes > 0) limitMinutes else 15
+
                     if (calledAt != null) {
-                        CountdownTimer(calledAt = calledAt)
+                        CountdownTimer(calledAt = calledAt, limitMinutes = safeLimit)
                     }
                 }
                 QueueStatus.DILAYANI -> {
@@ -281,12 +257,11 @@ fun PatientQrCard(bitmap: androidx.compose.ui.graphics.ImageBitmap) {
                 color = MaterialTheme.colorScheme.primary
             )
 
-            // Gambar QR
             Image(
                 bitmap = bitmap,
                 contentDescription = "QR Code Antrian",
                 modifier = Modifier
-                    .size(200.dp) // Ukuran QR Code
+                    .size(200.dp)
                     .aspectRatio(1f)
             )
 
@@ -300,20 +275,18 @@ fun PatientQrCard(bitmap: androidx.compose.ui.graphics.ImageBitmap) {
     }
 }
 
-
-
 /**
- * Composable helper (private) untuk Timer Hitung Mundur (15 menit).
- * Digunakan saat status [QueueStatus.DIPANGGIL].
- * @param calledAt Waktu [Date] kapan pasien dipanggil.
+ * [PERBAIKAN] Timer Hitung Mundur Dinamis.
+ * Menerima parameter `limitMinutes` agar sesuai settingan dokter/admin.
  */
 @Composable
-private fun CountdownTimer(calledAt: Date) {
-    val COUNTDOWN_DURATION_MS = 15 * 60 * 1000 // 15 menit
+private fun CountdownTimer(calledAt: Date, limitMinutes: Int) {
+    // Ubah menit ke milidetik
+    val countdownDurationMs = limitMinutes * 60 * 1000L
     var timeRemainingString by remember { mutableStateOf("--:--") }
 
-    LaunchedEffect(calledAt) {
-        val deadline = calledAt.time + COUNTDOWN_DURATION_MS
+    LaunchedEffect(calledAt, limitMinutes) {
+        val deadline = calledAt.time + countdownDurationMs
         while (true) {
             val remaining = deadline - System.currentTimeMillis()
             if (remaining > 0) {
@@ -337,11 +310,7 @@ private fun CountdownTimer(calledAt: Date) {
         Text(timeRemainingString, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
     }
 }
-/**
- * Composable helper (private) untuk Stopwatch.
- * Digunakan saat status [QueueStatus.DILAYANI].
- * @param startedAt Waktu [Date] kapan konsultasi dimulai.
- */
+
 @Composable
 private fun StopwatchTimer(startedAt: Date) {
     var elapsedTimeString by remember { mutableStateOf("00:00") }
@@ -365,11 +334,7 @@ private fun StopwatchTimer(startedAt: Date) {
         Text(elapsedTimeString, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color(0xFF00C853))
     }
 }
-/**
- * Composable helper (private) untuk kartu statistik (Antrian di depan & Estimasi).
- * @param uiState State UI saat ini.
- * @param displayedWaitTime Waktu tunggu (menit) yang sudah dihitung mundur.
- */
+
 @Composable
 private fun StatCard(
     uiState: QueueUiState,
@@ -391,10 +356,7 @@ private fun StatCard(
         }
     }
 }
-/**
- * Composable helper (private) untuk menampilkan daftar antrian aktif (chip).
- * @param uiState State UI saat ini.
- */
+
 @Composable
 private fun QueueChipList(uiState: QueueUiState) {
     if (uiState.upcomingQueues.isEmpty()) {
@@ -410,7 +372,10 @@ private fun QueueChipList(uiState: QueueUiState) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 4.dp)
         ) {
-            itemsIndexed(uiState.upcomingQueues) { index, queueItem ->
+            itemsIndexed(
+                items = uiState.upcomingQueues,
+                key = { _, item -> item.id }
+            ) { index, queueItem ->
                 QueueChip(
                     queueItem = queueItem,
                     isFirstInLine = (index == 0)
@@ -419,11 +384,7 @@ private fun QueueChipList(uiState: QueueUiState) {
         }
     }
 }
-/**
- * Composable helper (private) untuk satu item statistik di [StatCard].
- * @param value Nilai (misal: "5 Orang").
- * @param label Label (misal: "Di Depan Anda").
- */
+
 @Composable
 fun StatItem(value: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {

@@ -13,13 +13,13 @@ class MealPlanRepository {
     suspend fun getPrediction(
         bmi: Double,
         age: Int,
-        glucose: Double, // <-- Ganti Int ke Double
+        glucose: Double,
         systolic: Int,
         diastolic: Int,
         insulin: Double
     ): Result<MealPlanResponse> {
         return try {
-            // 1. Mapping Input UI ke Model Request API
+
             val request = MealPlanRequest(
                 bmi = bmi,
                 age = age,
@@ -31,7 +31,6 @@ class MealPlanRepository {
 
             Log.d("MealPlanRepo", "Mengirim Request: $request")
 
-            // 2. Panggil API
             val response = MlApiClient.service.predictMealPlan(request)
 
             Log.d("MealPlanRepo", "Sukses! Respon: ${response.prediction}")

@@ -21,8 +21,11 @@ import java.nio.charset.StandardCharsets
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import com.example.project_mobileapps.R
 /**
  * Model data UI lokal untuk satu artikel berita.
@@ -115,7 +118,13 @@ fun NewsItem(article: NewsArticleUI, onClick: () -> Unit) {
         Column {
             // Gambar Berita
             AsyncImage(
-                model = article.imageUrl,
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(article.imageUrl)
+                    .crossfade(true) // Animasi fade-in halus (Default: false)
+                    .crossfade(500)  // Durasi 0.5 detik
+                    .diskCachePolicy(CachePolicy.ENABLED) // Simpan di memori HP
+                    .networkCachePolicy(CachePolicy.ENABLED)
+                    .build(),
                 contentDescription = article.title,
                 contentScale = ContentScale.Crop, // Crop agar gambar mengisi area
                 // Placeholder jika gambar gagal dimuat

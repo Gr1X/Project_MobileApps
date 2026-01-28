@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.google.gms.google.services)
+    alias(libs.plugins.firebase.perf)
 }
 
 android {
@@ -110,4 +111,7 @@ dependencies {
 
     // 4. Accompanist Permissions (Opsional, tapi sangat memudahkan handling permission di Compose)
     implementation("com.google.accompanist:accompanist-permissions:0.37.3")
+
+    implementation(libs.firebase.perf)
+    implementation(platform(libs.firebase.bom))
 }

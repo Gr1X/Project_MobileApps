@@ -183,7 +183,7 @@ object AuthRepository {
             val authResult = auth.signInWithEmailAndPassword(email, password).await()
             val firebaseUser = authResult.user ?: throw Exception("Gagal login")
 
-            val whiteListedEmails = listOf("admin@klinik.com", "dokter@klinik.com")
+            val whiteListedEmails = listOf("admin@klinik.com", "dokter@klinik.com", "pasien@klinik.com")
             val isWhitelisted = whiteListedEmails.contains(email)
 
             if (!firebaseUser.isEmailVerified && !isWhitelisted) {
